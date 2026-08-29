@@ -8,6 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Firebase (compat SDK — kept simple so the rest of the app's code barely changes) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --ink:#0F2A2E;
@@ -243,15 +247,21 @@ input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input
     <div class="login-logo">🏪</div>
     <h1 id="login-shopname">Todtingtermalatod</h1>
     <p class="sub">ระบบจัดการร้านค้า</p>
-    <label>Username</label>
-    <input type="text" id="login-user" placeholder="กรอก Username">
-    <label>Password</label>
-    <input type="password" id="login-pass" placeholder="กรอก Password">
-    <div class="field-err" id="login-err" style="display:none"></div>
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doLogin()">เข้าสู่ระบบ</button>
-    <p class="hint" style="text-align:center;margin-top:16px">
-      <a href="javascript:void(0)" onclick="openClearCacheModal()" style="color:var(--muted)">ล้างแคช / เริ่มต้นระบบใหม่</a>
-    </p>
+    <div id="login-connecting" style="text-align:center;padding:14px 0;color:var(--muted);font-size:13.5px">
+      🔄 กำลังเชื่อมต่อฐานข้อมูลออนไลน์...
+    </div>
+    <div id="login-connect-err" class="field-err" style="display:none;text-align:center;margin-bottom:10px"></div>
+    <div id="login-form-fields" style="display:none">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="กรอก Username">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="กรอก Password">
+      <div class="field-err" id="login-err" style="display:none"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doLogin()">เข้าสู่ระบบ</button>
+      <p class="hint" style="text-align:center;margin-top:16px">
+        <a href="javascript:void(0)" onclick="openClearCacheModal()" style="color:var(--muted)">ล้างแคช / เริ่มต้นระบบใหม่</a>
+      </p>
+    </div>
   </div>
 </div>
 
@@ -300,6 +310,43 @@ let SESSION = null; // {userId, username, role}
 let CART = {}; // productId -> qty
 let CURRENT_ORDER = null; // pending order at checkout
 let currentEditImg = {}; // temp holder for image data urls in open form
+let CURRENT_PAGE = 'dashboard';
+let DB_READY = false;
+
+/* =========================================================================
+   FIREBASE CONFIG
+   ---------------------------------------------------------------------
+   1) Go to https://console.firebase.google.com → Add project (free)
+   2) In the project, click the "</>" (Web) icon to register a web app,
+      and copy the firebaseConfig object it gives you into FIREBASE_CONFIG below.
+   3) In the left menu: Build → Firestore Database → Create database
+      (start in "test mode" is fine to begin with).
+   4) In the left menu: Build → Authentication → Sign-in method → enable
+      "Anonymous". This app signs everyone in anonymously in the background
+      so Firestore Security Rules can require request.auth != null instead
+      of being wide open to the entire internet.
+   5) In Firestore → Rules, paste:
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /pos/{docId} {
+              allow read, write: if request.auth != null;
+            }
+          }
+        }
+      then click "Publish".
+   See README.md for the full step-by-step walkthrough.
+   ========================================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBUBFO7anEtbxLI0QxKkD2HzorzMRRTTs8",
+  authDomain: "todtingtermalatod.firebaseapp.com",
+  projectId: "todtingtermalatod",
+  storageBucket: "todtingtermalatod.firebasestorage.app",
+  messagingSenderId: "1060893171294",
+  appId: "1:1060893171294:web:2592d9cbf6ec2e3a90decf"
+};
+let fdb = null; // Firestore instance (null until configured + connected)
+const POS_DOC_PATH = ['pos','data']; // single shared document holding the whole shop's data
 
 /* ---------------- persistence ---------------- */
 function defaultRoles(){
@@ -335,29 +382,101 @@ function defaultDB(){
     seq:{product:0, material:0, order:0}
   };
 }
-function loadDB(){
-  try{
-    const raw = localStorage.getItem('posData');
-    DB = raw ? JSON.parse(raw) : defaultDB();
-    if(!DB.settings) DB.settings = {lineToken:''};
-    if(!DB.seq) DB.seq = {product:0, material:0, order:0};
-    // migrate orders created before "cancel order" support
-    DB.orders.forEach(o=>{ if(!o.status) o.status = 'completed'; });
-    if(!DB.roles || !DB.roles.length){
-      // migrate from older data files that had no dynamic role list
-      DB.roles = defaultRoles();
-      const usedNames = new Set(DB.users.map(u=>u.role));
-      usedNames.forEach(n=>{
-        if(n && !DB.roles.find(r=>r.name===n)){
-          DB.roles.push({id:uid(), name:n, permissions: MENUS.map(m=>m.key), isSystem:false,
-            createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()});
-        }
-      });
-      saveDB();
-    }
-  }catch(e){ DB = defaultDB(); }
+/* Fills in any fields missing from data written by older versions of this
+   app (works the same whether DB just arrived from Firestore or was freshly
+   created) — keeps this idempotent so it's safe to call on every snapshot. */
+function ensureDBDefaults(){
+  if(!DB.settings) DB.settings = {lineToken:''};
+  if(!DB.seq) DB.seq = {product:0, material:0, order:0};
+  if(!DB.orders) DB.orders = [];
+  if(!DB.activityLog) DB.activityLog = [];
+  if(!DB.materials) DB.materials = [];
+  if(!DB.products) DB.products = [];
+  if(!DB.paymentMethods) DB.paymentMethods = [];
+  if(!DB.users) DB.users = [];
+  DB.orders.forEach(o=>{ if(!o.status) o.status = 'completed'; });
+  if(!DB.roles || !DB.roles.length){
+    DB.roles = defaultRoles();
+    const usedNames = new Set(DB.users.map(u=>u.role));
+    usedNames.forEach(n=>{
+      if(n && !DB.roles.find(r=>r.name===n)){
+        DB.roles.push({id:uid(), name:n, permissions: MENUS.map(m=>m.key), isSystem:false,
+          createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()});
+      }
+    });
+  }
 }
-function saveDB(){ localStorage.setItem('posData', JSON.stringify(DB)); }
+function isFirebaseConfigured(){
+  return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
+}
+/* Saves the whole shared DB object back to Firestore (or localStorage as a
+   fallback if no Firebase config has been filled in yet, so the app still
+   works standalone while you're setting things up). Fire-and-forget: the UI
+   already re-renders from the in-memory DB immediately, this just persists
+   it for other devices / next load. */
+async function saveDB(){
+  if(!isFirebaseConfigured() || !fdb){
+    try{ localStorage.setItem('posData', JSON.stringify(DB)); }catch(e){}
+    return;
+  }
+  try{
+    await fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]).set(DB);
+  }catch(e){
+    console.error('Firestore save error', e);
+    toast('บันทึกข้อมูลขึ้นระบบออนไลน์ไม่สำเร็จ (ตรวจสอบอินเทอร์เน็ต)');
+  }
+}
+/* Boots the app: connects to Firestore (with anonymous auth) and keeps DB in
+   sync in real time across every device that has this page open. Falls back
+   to plain localStorage (single device only) if Firebase isn't configured. */
+function bootData(onReady){
+  if(!isFirebaseConfigured()){
+    try{
+      const raw = localStorage.getItem('posData');
+      DB = raw ? JSON.parse(raw) : defaultDB();
+    }catch(e){ DB = defaultDB(); }
+    ensureDBDefaults();
+    DB_READY = true;
+    onReady();
+    return;
+  }
+  try{
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    fdb = firebase.firestore();
+    firebase.auth().signInAnonymously().catch(err=>{
+      console.error('Firebase anonymous auth error', err);
+      showLoginConnectError('เชื่อมต่อระบบยืนยันตัวตนไม่สำเร็จ ตรวจสอบว่าเปิดใช้งาน Anonymous sign-in ใน Firebase Authentication แล้ว');
+    });
+    firebase.auth().onAuthStateChanged(user=>{
+      if(!user) return;
+      const docRef = fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]);
+      docRef.onSnapshot(async snap=>{
+        if(snap.exists){
+          DB = snap.data();
+        } else {
+          DB = defaultDB();
+          try{ await docRef.set(DB); }catch(e){ console.error(e); }
+        }
+        ensureDBDefaults();
+        const firstLoad = !DB_READY;
+        DB_READY = true;
+        onReady(firstLoad);
+      }, err=>{
+        console.error('Firestore snapshot error', err);
+        showLoginConnectError('เชื่อมต่อฐานข้อมูลออนไลน์ไม่สำเร็จ ตรวจสอบ Firestore Rules และการตั้งค่า Firebase config');
+      });
+    });
+  }catch(e){
+    console.error('Firebase init error', e);
+    showLoginConnectError('ตั้งค่า Firebase ไม่ถูกต้อง กรุณาตรวจสอบ FIREBASE_CONFIG ในไฟล์โค้ด');
+  }
+}
+function showLoginConnectError(msg){
+  const el = document.getElementById('login-connect-err');
+  if(el){ el.textContent = msg; el.style.display='block'; }
+  const c = document.getElementById('login-connecting');
+  if(c) c.style.display='none';
+}
 
 function nextCode(prefix, seqKey){
   DB.seq[seqKey] = (DB.seq[seqKey]||0) + 1;
@@ -406,6 +525,31 @@ function readImage(input, cb){
   reader.onload = ()=> cb(reader.result);
   reader.readAsDataURL(f);
 }
+/* Resizes/compresses an uploaded image before it's stored. Important once
+   data lives in Firestore: each document has a 1MiB limit, and this whole
+   shop's data shares one document, so keeping images small (~640px, JPEG)
+   matters a lot more than it did with plain localStorage. */
+function compressImageFile(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h >= w && h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=> reject(new Error('อ่านไฟล์ภาพไม่สำเร็จ'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=> reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
 /* Reusable image upload box: avoids fragile inline-string HTML tricks so the
    preview always renders correctly right after a file is chosen. */
 function uploadBoxHTML(boxId, key, currentValue, placeholder){
@@ -415,10 +559,11 @@ function uploadBoxHTML(boxId, key, currentValue, placeholder){
     </div>`;
 }
 function handleImageUpload(input, key, boxId, placeholder){
-  readImage(input, dataUrl=>{
+  const f = input.files[0]; if(!f) return;
+  compressImageFile(f, 640, 0.72).then(dataUrl=>{
     currentEditImg[key] = dataUrl;
     document.getElementById(boxId).outerHTML = uploadBoxHTML(boxId, key, dataUrl, placeholder);
-  });
+  }).catch(()=>{ toast('ไม่สามารถประมวลผลรูปภาพนี้ได้ ลองใช้รูปอื่น'); });
 }
 
 function hasPerm(key){
@@ -430,9 +575,13 @@ function hasPerm(key){
 /* ---------------- clear cache / full reset ---------------- */
 const CLEAR_CACHE_PHRASE = 'ล้างข้อมูล';
 function openClearCacheModal(){
+  const onlineNote = isFirebaseConfigured()
+    ? `<div class="hint" style="color:var(--danger)">⚠️ ระบบเชื่อมต่อฐานข้อมูลออนไลน์ (Firebase) อยู่ — การล้างแคชนี้จะลบข้อมูล<b>ของร้านทั้งหมดบนออนไลน์</b> ซึ่งกระทบทุกเครื่อง/ทุกคนที่ใช้ระบบนี้ร่วมกัน ไม่ใช่แค่เครื่องนี้เครื่องเดียว</div>`
+    : `<div class="hint">ระบบนี้ยังไม่ได้เชื่อมต่อฐานข้อมูลออนไลน์ (Firebase) — ข้อมูลที่จะถูกลบเป็นของเบราว์เซอร์เครื่องนี้เท่านั้น</div>`;
   openModal(`
     <div class="modal-head"><h3>ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <div class="check-alert show">คำเตือน: การล้างแคชจะลบข้อมูลทั้งหมดที่บันทึกไว้ในเบราว์เซอร์เครื่องนี้อย่างถาวร ได้แก่ สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน และการตั้งค่าทั้งหมด ไม่สามารถกู้คืนได้ และระบบจะกลับไปเป็นค่าเริ่มต้น (บัญชี Superadmin ใหม่)</div>
+    <div class="check-alert show">คำเตือน: การล้างแคชจะลบข้อมูลทั้งหมดอย่างถาวร ได้แก่ สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน และการตั้งค่าทั้งหมด ไม่สามารถกู้คืนได้ และระบบจะกลับไปเป็นค่าเริ่มต้น (บัญชี Superadmin ใหม่)</div>
+    ${onlineNote}
     <div class="hint">แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน" หากยังไม่ได้ทำ</div>
     <label>พิมพ์ "<b>${CLEAR_CACHE_PHRASE}</b>" เพื่อยืนยันการล้างแคช</label>
     <input type="text" id="cc-confirm-text" placeholder="${CLEAR_CACHE_PHRASE}">
@@ -440,11 +589,15 @@ function openClearCacheModal(){
     <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="doClearCache()">ยืนยันล้างแคชทั้งหมด</button>
   `);
 }
-function doClearCache(){
+async function doClearCache(){
   const val = document.getElementById('cc-confirm-text').value.trim();
   if(val !== CLEAR_CACHE_PHRASE){ document.getElementById('cc-confirm-err').style.display='block'; return; }
   try{ localStorage.removeItem('posData'); }catch(e){}
   try{ sessionStorage.removeItem('posSession'); }catch(e){}
+  if(isFirebaseConfigured() && fdb){
+    try{ await fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]).set(defaultDB()); }
+    catch(e){ console.error(e); toast('ล้างข้อมูลออนไลน์ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต'); return; }
+  }
   location.reload();
 }
 
@@ -488,6 +641,7 @@ function renderNav(){
   ).join('');
 }
 function go(page){
+  CURRENT_PAGE = page;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nb = document.getElementById('nav-'+page); if(nb) nb.classList.toggle('active', true);
   renderAlertStrip();
@@ -499,6 +653,17 @@ function go(page){
   document.getElementById('cart-fab').classList.toggle('show', page==='sell' && cartCount()>0);
   (renderers[page]||renderDashboard)();
   document.getElementById('main').scrollTop = 0;
+}
+function isModalOpen(){ return document.getElementById('modal-bg').classList.contains('show'); }
+/* Called whenever fresh data arrives from Firestore (from another device, or
+   our own write). Only re-paints the current page — never touches an open
+   modal — so someone mid-edit on this device isn't interrupted. */
+function refreshCurrentView(){
+  if(!SESSION) return;
+  document.getElementById('tb-shopname').textContent = '🏪 ' + (DB.shop.name || 'ร้านค้า');
+  document.getElementById('sb-shopname').textContent = DB.shop.name || 'ร้านค้า';
+  if(isModalOpen()) { renderAlertStrip(); return; }
+  go(CURRENT_PAGE);
 }
 function renderAlertStrip(){
   const strip = document.getElementById('alert-strip');
@@ -1681,18 +1846,26 @@ function deleteUser(id){
 /* =========================================================================
    BOOTSTRAP
    ========================================================================= */
-loadDB();
-document.getElementById('login-shopname').textContent = DB.shop.name || 'Todtingtermalatod';
-(function tryResume(){
-  try{
-    const raw = sessionStorage.getItem('posSession');
-    if(raw){
-      const s = JSON.parse(raw);
-      const u = DB.users.find(x=>x.id===s.userId && x.username===s.username);
-      if(u && u.active){ SESSION = {userId:u.id, username:u.username, name:u.name, role:u.role, permissions:u.permissions||[]}; enterApp(); }
-    }
-  }catch(e){}
-})();
+bootData(function(firstLoad){
+  document.getElementById('login-shopname').textContent = DB.shop.name || 'Todtingtermalatod';
+  if(firstLoad === undefined || firstLoad === true){
+    // first time data has arrived — reveal the login form and try to resume a session
+    document.getElementById('login-connecting').style.display = 'none';
+    document.getElementById('login-connect-err').style.display = 'none';
+    document.getElementById('login-form-fields').style.display = 'block';
+    try{
+      const raw = sessionStorage.getItem('posSession');
+      if(raw){
+        const s = JSON.parse(raw);
+        const u = DB.users.find(x=>x.id===s.userId && x.username===s.username);
+        if(u && u.active){ SESSION = {userId:u.id, username:u.username, name:u.name, role:u.role, permissions:u.permissions||[]}; enterApp(); }
+      }
+    }catch(e){}
+  } else {
+    // a later update (from this device or another) — just refresh what's on screen
+    refreshCurrentView();
+  }
+});
 document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 </script>
 </body>
