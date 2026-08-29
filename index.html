@@ -249,6 +249,9 @@ input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input
     <input type="password" id="login-pass" placeholder="กรอก Password">
     <div class="field-err" id="login-err" style="display:none"></div>
     <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <p class="hint" style="text-align:center;margin-top:16px">
+      <a href="javascript:void(0)" onclick="openClearCacheModal()" style="color:var(--muted)">ล้างแคช / เริ่มต้นระบบใหม่</a>
+    </p>
   </div>
 </div>
 
@@ -422,6 +425,27 @@ function hasPerm(key){
   if(!SESSION) return false;
   if(SESSION.role==='Superadmin') return true;
   return (SESSION.permissions||[]).includes(key);
+}
+
+/* ---------------- clear cache / full reset ---------------- */
+const CLEAR_CACHE_PHRASE = 'ล้างข้อมูล';
+function openClearCacheModal(){
+  openModal(`
+    <div class="modal-head"><h3>ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <div class="check-alert show">คำเตือน: การล้างแคชจะลบข้อมูลทั้งหมดที่บันทึกไว้ในเบราว์เซอร์เครื่องนี้อย่างถาวร ได้แก่ สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน และการตั้งค่าทั้งหมด ไม่สามารถกู้คืนได้ และระบบจะกลับไปเป็นค่าเริ่มต้น (บัญชี Superadmin ใหม่)</div>
+    <div class="hint">แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน" หากยังไม่ได้ทำ</div>
+    <label>พิมพ์ "<b>${CLEAR_CACHE_PHRASE}</b>" เพื่อยืนยันการล้างแคช</label>
+    <input type="text" id="cc-confirm-text" placeholder="${CLEAR_CACHE_PHRASE}">
+    <div class="field-err" id="cc-confirm-err" style="display:none">ข้อความไม่ตรงกัน กรุณาพิมพ์ "${CLEAR_CACHE_PHRASE}" ให้ถูกต้อง</div>
+    <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="doClearCache()">ยืนยันล้างแคชทั้งหมด</button>
+  `);
+}
+function doClearCache(){
+  const val = document.getElementById('cc-confirm-text').value.trim();
+  if(val !== CLEAR_CACHE_PHRASE){ document.getElementById('cc-confirm-err').style.display='block'; return; }
+  try{ localStorage.removeItem('posData'); }catch(e){}
+  try{ sessionStorage.removeItem('posSession'); }catch(e){}
+  location.reload();
 }
 
 /* ---------------- auth ---------------- */
@@ -1439,6 +1463,11 @@ function renderShop(){
       <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
       ${DB.activityLog.filter(l=>l.action.includes('ร้าน')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
       </table></div>
+    </div>
+    <div class="card" style="border:1px solid var(--danger-bg)">
+      <b style="color:var(--danger)">⚠️ เขตอันตราย</b>
+      <p class="hint">ล้างแคชระบบจะลบข้อมูลทั้งหมดที่บันทึกไว้ในเบราว์เซอร์เครื่องนี้ (สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน การตั้งค่า) แล้วเริ่มต้นระบบใหม่ทั้งหมด แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน"</p>
+      <button class="btn btn-danger btn-sm" onclick="openClearCacheModal()">🧹 ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</button>
     </div>`;
 }
 function saveShop(){
