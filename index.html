@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<!-- Firebase (compat SDK — kept simple so the rest of the app's code barely changes) -->
+<!-- Firebase (compat SDK) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -289,8 +289,7 @@ input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input
 
 <script>
 /* =========================================================================
-   Todtingtermalatod POS — single-file web app
-   Data persistence: window.localStorage (key "posData")
+   Todtingtermalatod POS — single-file web app with Firebase Firestore
    ========================================================================= */
 
 const MENUS = [
@@ -306,36 +305,15 @@ const MENUS = [
 ];
 
 let DB = null;
-let SESSION = null; // {userId, username, role}
-let CART = {}; // productId -> qty
-let CURRENT_ORDER = null; // pending order at checkout
-let currentEditImg = {}; // temp holder for image data urls in open form
+let SESSION = null; 
+let CART = {}; 
+let CURRENT_ORDER = null; 
+let currentEditImg = {}; 
 let CURRENT_PAGE = 'dashboard';
 let DB_READY = false;
 
 /* =========================================================================
    FIREBASE CONFIG
-   ---------------------------------------------------------------------
-   1) Go to https://console.firebase.google.com → Add project (free)
-   2) In the project, click the "</>" (Web) icon to register a web app,
-      and copy the firebaseConfig object it gives you into FIREBASE_CONFIG below.
-   3) In the left menu: Build → Firestore Database → Create database
-      (start in "test mode" is fine to begin with).
-   4) In the left menu: Build → Authentication → Sign-in method → enable
-      "Anonymous". This app signs everyone in anonymously in the background
-      so Firestore Security Rules can require request.auth != null instead
-      of being wide open to the entire internet.
-   5) In Firestore → Rules, paste:
-        rules_version = '2';
-        service cloud.firestore {
-          match /databases/{database}/documents {
-            match /pos/{docId} {
-              allow read, write: if request.auth != null;
-            }
-          }
-        }
-      then click "Publish".
-   See README.md for the full step-by-step walkthrough.
    ========================================================================= */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBUBFO7anEtbxLI0QxKkD2HzorzMRRTTs8",
@@ -345,8 +323,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1060893171294",
   appId: "1:1060893171294:web:2592d9cbf6ec2e3a90decf"
 };
-let fdb = null; // Firestore instance (null until configured + connected)
-const POS_DOC_PATH = ['pos','data']; // single shared document holding the whole shop's data
+let fdb = null; 
+const POS_DOC_PATH = ['pos','data']; 
 
 /* ---------------- persistence ---------------- */
 function defaultRoles(){
@@ -382,9 +360,7 @@ function defaultDB(){
     seq:{product:0, material:0, order:0}
   };
 }
-/* Fills in any fields missing from data written by older versions of this
-   app (works the same whether DB just arrived from Firestore or was freshly
-   created) — keeps this idempotent so it's safe to call on every snapshot. */
+
 function ensureDBDefaults(){
   if(!DB.settings) DB.settings = {lineToken:''};
   if(!DB.seq) DB.seq = {product:0, material:0, order:0};
@@ -409,11 +385,7 @@ function ensureDBDefaults(){
 function isFirebaseConfigured(){
   return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 }
-/* Saves the whole shared DB object back to Firestore (or localStorage as a
-   fallback if no Firebase config has been filled in yet, so the app still
-   works standalone while you're setting things up). Fire-and-forget: the UI
-   already re-renders from the in-memory DB immediately, this just persists
-   it for other devices / next load. */
+
 async function saveDB(){
   if(!isFirebaseConfigured() || !fdb){
     try{ localStorage.setItem('posData', JSON.stringify(DB)); }catch(e){}
@@ -426,9 +398,7 @@ async function saveDB(){
     toast('บันทึกข้อมูลขึ้นระบบออนไลน์ไม่สำเร็จ (ตรวจสอบอินเทอร์เน็ต)');
   }
 }
-/* Boots the app: connects to Firestore (with anonymous auth) and keeps DB in
-   sync in real time across every device that has this page open. Falls back
-   to plain localStorage (single device only) if Firebase isn't configured. */
+
 function bootData(onReady){
   if(!isFirebaseConfigured()){
     try{
@@ -441,7 +411,7 @@ function bootData(onReady){
     return;
   }
   try{
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.initializeApp(FIREBASE_CONFIG);
     fdb = firebase.firestore();
     firebase.auth().signInAnonymously().catch(err=>{
       console.error('Firebase anonymous auth error', err);
@@ -471,6 +441,7 @@ function bootData(onReady){
     showLoginConnectError('ตั้งค่า Firebase ไม่ถูกต้อง กรุณาตรวจสอบ FIREBASE_CONFIG ในไฟล์โค้ด');
   }
 }
+
 function showLoginConnectError(msg){
   const el = document.getElementById('login-connect-err');
   if(el){ el.textContent = msg; el.style.display='block'; }
@@ -505,8 +476,6 @@ function calcProductCost(product){
     return sum + (mat ? Number(mat.costPerUnit||0)*Number(mu.qty||0) : 0);
   },0);
 }
-/* Orders with status 'cancelled' are excluded from revenue, dashboard and
-   profit/loss figures, but remain visible in history for audit purposes. */
 function activeOrders(){ return DB.orders.filter(o=>o.status!=='cancelled'); }
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
@@ -519,16 +488,6 @@ function openModal(html){
 function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); currentEditImg={}; }
 document.getElementById('modal-bg').addEventListener('click', e=>{ if(e.target.id==='modal-bg') closeModal(); });
 
-function readImage(input, cb){
-  const f = input.files[0]; if(!f) return;
-  const reader = new FileReader();
-  reader.onload = ()=> cb(reader.result);
-  reader.readAsDataURL(f);
-}
-/* Resizes/compresses an uploaded image before it's stored. Important once
-   data lives in Firestore: each document has a 1MiB limit, and this whole
-   shop's data shares one document, so keeping images small (~640px, JPEG)
-   matters a lot more than it did with plain localStorage. */
 function compressImageFile(file, maxDim, quality){
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
@@ -550,8 +509,6 @@ function compressImageFile(file, maxDim, quality){
     reader.readAsDataURL(file);
   });
 }
-/* Reusable image upload box: avoids fragile inline-string HTML tricks so the
-   preview always renders correctly right after a file is chosen. */
 function uploadBoxHTML(boxId, key, currentValue, placeholder){
   return `<div class="upload-box" id="${boxId}">
       <input type="file" accept="image/*" onchange="handleImageUpload(this,'${key}','${boxId}',${JSON.stringify(placeholder)})">
@@ -655,9 +612,7 @@ function go(page){
   document.getElementById('main').scrollTop = 0;
 }
 function isModalOpen(){ return document.getElementById('modal-bg').classList.contains('show'); }
-/* Called whenever fresh data arrives from Firestore (from another device, or
-   our own write). Only re-paints the current page — never touches an open
-   modal — so someone mid-edit on this device isn't interrupted. */
+
 function refreshCurrentView(){
   if(!SESSION) return;
   document.getElementById('tb-shopname').textContent = '🏪 ' + (DB.shop.name || 'ร้านค้า');
@@ -921,7 +876,7 @@ function saveProduct(id){
 }
 
 /* =========================================================================
-   MATERIALS (raw materials / inventory)
+   MATERIALS
    ========================================================================= */
 function renderMaterials(){
   const main = document.getElementById('main');
@@ -1050,7 +1005,7 @@ function saveStockMove(id){
 }
 
 /* =========================================================================
-   SELL (product selection / cart)
+   SELL
    ========================================================================= */
 function cartCount(){ return Object.values(CART).reduce((s,q)=>s+q,0); }
 function cartTotal(){ return Object.entries(CART).reduce((s,[pid,q])=>{ const p=DB.products.find(x=>x.id===pid); return s + (p?p.price*q:0); },0); }
@@ -1197,10 +1152,8 @@ function confirmPayment(pmId){
     change = received - total;
   }
   const items = window._checkoutItems.map(({p,q})=>({productId:p.id, name:p.name, qty:q, price:p.price}));
-  // deduct stock
   window._checkoutItems.forEach(({p,q})=>{
     p.qty -= q;
-    // deduct materials used
     (p.materials||[]).forEach(mu=>{
       const mat = DB.materials.find(x=>x.id===mu.materialId);
       if(mat){ mat.qty = Math.max(0, mat.qty - mu.qty*q); mat.log=mat.log||[]; mat.log.push({time:Date.now(),type:'out',qty:mu.qty*q,user:SESSION.username}); }
@@ -1262,9 +1215,7 @@ function showReceipt(order, resetAfterClose){
     <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="closeReceipt(${resetAfterClose?'true':'false'})">ปิด</button>
   `);
 }
-function printReceipt(){
-  window.print();
-}
+function printReceipt(){ window.print(); }
 function downloadReceipt(orderNo){
   html2canvas(document.getElementById('receipt-capture'), {backgroundColor:'#fff', scale:2}).then(canvas=>{
     const link = document.createElement('a');
@@ -1278,9 +1229,6 @@ function closeReceipt(resetToSell){
   if(resetToSell) go('sell'); else go('history');
 }
 
-/* LINE Notify (best-effort — browsers block cross-origin POST to notify-api.line.me
-   without a server-side proxy due to CORS. Code included for when hosted behind a proxy
-   or run via server-side automation.) */
 function sendLineNotify(order){
   const token = DB.settings.lineToken;
   if(!token) return;
@@ -1289,11 +1237,11 @@ function sendLineNotify(order){
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':'Bearer '+token},
     body:'message='+encodeURIComponent(msg)
-  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ (อาจติด CORS — ต้องใช้ Proxy ฝั่งเซิร์ฟเวอร์)'); });
+  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ'); });
 }
 
 /* =========================================================================
-   HISTORY (orders + receipts)
+   HISTORY
    ========================================================================= */
 function renderHistory(){
   const main = document.getElementById('main');
@@ -1331,7 +1279,7 @@ function openCancelOrder(orderId){
   if(!o || o.status==='cancelled') return;
   openModal(`
     <div class="modal-head"><h3>ยกเลิก Order ${o.orderNo}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <div class="hint">การยกเลิกจะคืนจำนวนสินค้าและวัตถุดิบที่ตัดสต็อกไปแล้วกลับเข้าคลังทั้งหมด ยอดขายของ Order นี้จะไม่ถูกนับในภาพรวม/กำไร-ขาดทุนอีกต่อไป แต่ยังคงเก็บประวัติไว้เพื่อการตรวจสอบ</div>
+    <div class="hint">การยกเลิกจะคืนจำนวนสินค้าและวัตถุดิบที่ตัดสต็อกไปแล้วกลับเข้าคลังทั้งหมด</div>
     <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>สินค้า</th><th>จำนวน</th><th>รวม</th></tr>
     ${o.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${it.qty}</td><td>฿${money(it.qty*it.price)}</td></tr>`).join('')}
     </table></div>
@@ -1347,14 +1295,12 @@ function confirmCancelOrder(orderId){
   if(!reason){ document.getElementById('cancel-reason-err').style.display='block'; return; }
   const o = DB.orders.find(x=>x.id===orderId);
   if(!o || o.status==='cancelled') { closeModal(); return; }
-  if(!confirm(`ยืนยันยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)}? การกระทำนี้จะคืนสต็อกสินค้าและวัตถุดิบกลับเข้าคลัง`)) return;
+  if(!confirm(`ยืนยันยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)}?`)) return;
 
-  // restore product stock
   o.items.forEach(it=>{
     const p = DB.products.find(x=>x.id===it.productId);
     if(p){
       p.qty += it.qty;
-      // restore materials used by this product's recipe
       (p.materials||[]).forEach(mu=>{
         const mat = DB.materials.find(x=>x.id===mu.materialId);
         if(mat){
@@ -1371,25 +1317,14 @@ function confirmCancelOrder(orderId){
   o.cancelReason = reason;
   logActivity('ยกเลิก Order', `ยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)} เหตุผล: ${reason}`);
   saveDB();
-  sendLineNotifyCancel(o);
   closeModal();
   renderHistoryList();
   toast('ยกเลิก Order และคืนสต็อกเรียบร้อยแล้ว');
 }
-function sendLineNotifyCancel(order){
-  const token = DB.settings.lineToken;
-  if(!token) return;
-  const msg = `\nOrder ${order.orderNo} ถูกยกเลิก\nยอดรวม ฿${money(order.total)}\nยกเลิกโดย: ${order.cancelledBy}\nเหตุผล: ${order.cancelReason}`;
-  fetch('https://notify-api.line.me/api/notify', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':'Bearer '+token},
-    body:'message='+encodeURIComponent(msg)
-  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ (อาจติด CORS — ต้องใช้ Proxy ฝั่งเซิร์ฟเวอร์)'); });
-}
 function clearHistory(){
-  if(!confirm('ยืนยันการล้างประวัติการขายทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
+  if(!confirm('ยืนยันการลบประวัติการขายทั้งหมด?')) return;
   DB.orders = [];
-  logActivity('ล้างประวัติการขาย', 'ล้างประวัติการขายทั้งหมด');
+  logActivity('ลบประวัติ', 'ลบประวัติการขายทั้งหมด');
   saveDB(); renderHistoryList();
 }
 
@@ -1416,10 +1351,7 @@ function renderProfit(){
         <button class="btn btn-outline btn-sm" onclick="exportProfitExcel()">⬇️ Export Excel</button>
       </div>
     </div>
-    <div id="profit-result"></div>
-    <div class="card">
-      <p class="hint">💡 ต้นทุนคำนวณจาก "ต้นทุนวัตถุดิบต่อหน่วย" ที่ตั้งค่าไว้ล่าสุดของสินค้าแต่ละรายการ (เมนู "สินค้า") หากมีการเปลี่ยนแปลงต้นทุนวัตถุดิบภายหลัง ตัวเลขในรายงานย้อนหลังจะคำนวณด้วยต้นทุนปัจจุบัน ไม่ใช่ต้นทุน ณ วันที่ขายจริง</p>
-    </div>`;
+    <div id="profit-result"></div>`;
   window._profitRange = 'day';
   runProfit();
 }
@@ -1473,7 +1405,7 @@ function runProfit(){
   const bars = data.rows.slice(0,8).map(r=>`
     <div style="margin-bottom:8px">
       <div class="row" style="justify-content:space-between;font-size:12.5px;margin-bottom:3px">
-        <span>${esc(r.name)}${r.missing?' <span class="badge warn">ไม่พบสินค้า</span>':''}</span>
+        <span>${esc(r.name)}</span>
         <span style="font-weight:700;color:${r.profit>=0?'var(--teal-700)':'var(--danger)'}">฿${money(r.profit)}</span>
       </div>
       <div style="background:var(--paper);border-radius:8px;height:10px;overflow:hidden">
@@ -1483,7 +1415,7 @@ function runProfit(){
 
   const rows = data.rows.map(r=>`
     <tr>
-      <td>${esc(r.name)}${r.missing?' <span class="badge warn">ไม่พบสินค้า</span>':''}</td>
+      <td>${esc(r.name)}</td>
       <td>${r.qty}</td>
       <td>฿${money(r.revenue)}</td>
       <td>฿${money(r.cost)}</td>
@@ -1523,7 +1455,6 @@ function exportProfitExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'กำไร-ขาดทุน');
   XLSX.writeFile(wb, `profit_loss_${Date.now()}.xlsx`);
-  logActivity('Export Excel', `ส่งออกข้อมูลกำไร-ขาดทุน`);
 }
 
 /* =========================================================================
@@ -1534,16 +1465,9 @@ function renderPayments(){
   main.innerHTML = `
     <div class="page-title">💳 จัดการการชำระเงิน</div>
     <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openPMForm()">+ เพิ่มวิธีการชำระเงิน</button></div>
-    <div class="card" id="pm-list"></div>
-    <div class="card">
-      <b>การแจ้งเตือน LINE Notify</b>
-      <p class="hint">กรอก LINE Notify Token เพื่อแจ้งเตือนอัตโนมัติเมื่อมี Order ใหม่ (ต้องเปิดผ่านเซิร์ฟเวอร์ที่รองรับ CORS เพื่อให้ทำงานได้จริงบนเบราว์เซอร์)</p>
-      <input type="text" id="line-token" placeholder="LINE Notify Token" value="${esc(DB.settings.lineToken||'')}">
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="saveLineToken()">บันทึก Token</button>
-    </div>`;
+    <div class="card" id="pm-list"></div>`;
   renderPMList();
 }
-function saveLineToken(){ DB.settings.lineToken = document.getElementById('line-token').value.trim(); saveDB(); toast('บันทึกแล้ว'); }
 function renderPMList(){
   document.getElementById('pm-list').innerHTML = DB.paymentMethods.length ? DB.paymentMethods.map(pm=>`
     <div class="list-item">
@@ -1585,18 +1509,14 @@ function savePM(id){
     pm.name=name; pm.desc=document.getElementById('pmf-desc').value.trim(); pm.icon=currentEditImg.pmIcon;
     pm.qrImage=currentEditImg.pmQr||''; pm.cash=document.getElementById('pmf-cash').checked;
     pm.updatedBy=SESSION.username; pm.updatedAt=now;
-    logActivity('แก้ไขวิธีชำระเงิน', `แก้ไข ${name}`);
   } else {
     DB.paymentMethods.push({id:uid(), name, desc:document.getElementById('pmf-desc').value.trim(), icon:currentEditImg.pmIcon, qrImage:currentEditImg.pmQr||'', cash:document.getElementById('pmf-cash').checked, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่มวิธีชำระเงิน', `เพิ่ม ${name}`);
   }
   saveDB(); closeModal(); renderPMList();
 }
 function deletePM(id){
   if(!confirm('ยืนยันการลบ?')) return;
-  const pm = DB.paymentMethods.find(x=>x.id===id);
   DB.paymentMethods = DB.paymentMethods.filter(x=>x.id!==id);
-  logActivity('ลบวิธีชำระเงิน', `ลบ ${pm.name}`);
   saveDB(); renderPMList();
 }
 
@@ -1623,186 +1543,87 @@ function renderShop(){
       ${uploadBoxHTML('sf-imgbox','shop', s.image, 'แตะเพื่ออัปโหลดภาพร้าน')}
       <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveShop()">บันทึกข้อมูลร้าน</button>
     </div>
-    <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูลร้าน</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('ร้าน')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
-      </table></div>
-    </div>
     <div class="card" style="border:1px solid var(--danger-bg)">
       <b style="color:var(--danger)">⚠️ เขตอันตราย</b>
-      <p class="hint">ล้างแคชระบบจะลบข้อมูลทั้งหมดที่บันทึกไว้ในเบราว์เซอร์เครื่องนี้ (สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน การตั้งค่า) แล้วเริ่มต้นระบบใหม่ทั้งหมด แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน"</p>
-      <button class="btn btn-danger btn-sm" onclick="openClearCacheModal()">🧹 ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</button>
-    </div>`;
+      <p class="hint">ล้างแคชระบบจะลบข้อมูลทั้งหมดและคืนค่าเริ่มต้นของระบบ</p>
+      <button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="openClearCacheModal()">ล้างแคช / รีเซ็ตระบบทั้งหมด</button>
+    </div>
+  `;
 }
 function saveShop(){
-  const name=document.getElementById('sf-name').value.trim();
-  const desc=document.getElementById('sf-desc').value.trim();
-  const addr=document.getElementById('sf-addr').value.trim();
-  const phone=document.getElementById('sf-phone').value.trim();
-  if(!name||!desc||!addr||!phone){ toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
-  if(!/^\d{10}$/.test(phone)){ toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก'); return; }
-  DB.shop = {name, desc, address:addr, phone, image: currentEditImg.shop||DB.shop.image||''};
-  logActivity('แก้ไขข้อมูลร้าน', `${SESSION.username} อัปเดตข้อมูลร้าน`);
+  const name = document.getElementById('sf-name').value.trim();
+  const desc = document.getElementById('sf-desc').value.trim();
+  const address = document.getElementById('sf-addr').value.trim();
+  const phone = document.getElementById('sf-phone').value.trim();
+  if(!name || !desc || !address || !phone){ toast('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
+  DB.shop = {name, desc, address, phone, image: currentEditImg.shop || DB.shop.image || ''};
+  logActivity('แก้ไขข้อมูลร้าน', 'อัปเดตข้อมูลร้านค้า');
   saveDB();
   document.getElementById('tb-shopname').textContent = '🏪 ' + name;
   document.getElementById('sb-shopname').textContent = name;
-  toast('บันทึกข้อมูลร้านแล้ว'); renderShop();
+  toast('บันทึกข้อมูลร้านเรียบร้อยแล้ว');
 }
 
 /* =========================================================================
-   USERS + ROLES
+   USERS & ROLES
    ========================================================================= */
 function renderUsers(){
-  window._usersTab = window._usersTab || 'users';
   const main = document.getElementById('main');
   main.innerHTML = `
-    <div class="page-title">👤 จัดการผู้ใช้งาน</div>
+    <div class="page-title">👤 จัดการผู้ใช้งานและสิทธิ์</div>
     <div class="tabs">
-      <button class="tab" id="utab-users" onclick="switchUsersTab('users')">ผู้ใช้งาน</button>
-      <button class="tab" id="utab-roles" onclick="switchUsersTab('roles')">🔑 จัดการ Role</button>
+      <button class="tab active" id="utab-users" onclick="switchUserTab('users')">รายชื่อผู้ใช้งาน</button>
+      <button class="tab" id="utab-roles" onclick="switchUserTab('roles')">กลุ่มสิทธิ์การใช้งาน</button>
     </div>
-    <div id="users-tab-body"></div>`;
-  switchUsersTab(window._usersTab);
+    <div id="utab-content"></div>`;
+  window._userTab = 'users';
+  renderUserTabContent();
 }
-function switchUsersTab(tab){
-  window._usersTab = tab;
-  document.getElementById('utab-users').classList.toggle('active', tab==='users');
-  document.getElementById('utab-roles').classList.toggle('active', tab==='roles');
-  document.getElementById('users-tab-body').innerHTML = tab==='users' ? `
+function switchUserTab(t){
+  window._userTab = t;
+  document.getElementById('utab-users').classList.toggle('active', t==='users');
+  document.getElementById('utab-roles').classList.toggle('active', t==='roles');
+  renderUserTabContent();
+}
+function renderUserTabContent(){
+  if(window._userTab==='users') renderUserListSection();
+  else renderRoleListSection();
+}
+function renderUserListSection(){
+  document.getElementById('utab-content').innerHTML = `
     <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openUserForm()">+ เพิ่มผู้ใช้งาน</button></div>
-    <div class="card" id="user-list"></div>
-    <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูลผู้ใช้งาน</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('ผู้ใช้งาน')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
-      </table></div>
-    </div>` : `
-    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openRoleForm()">+ เพิ่ม Role</button></div>
-    <div class="card" id="role-list"></div>
-    <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูล Role</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('Role')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
-      </table></div>
-    </div>`;
-  if(tab==='users') renderUserList(); else renderRoleList();
-}
-
-/* ---- Roles CRUD ---- */
-function renderRoleList(){
-  document.getElementById('role-list').innerHTML = DB.roles.length ? DB.roles.map(r=>{
-    const inUse = DB.users.filter(u=>u.role===r.name).length;
-    return `<div class="list-item">
-      <div class="thumb ph">🔑</div>
-      <div class="grow">
-        <div class="li-title">${esc(r.name)} ${r.isSystem?'<span class="badge ok">ระบบ</span>':''}</div>
-        <div class="li-sub">มองเห็น ${r.permissions.length}/${MENUS.length} เมนู · ใช้งานโดย ${inUse} คน</div>
-      </div>
-      <div class="li-actions">
-        <button class="btn btn-outline btn-sm" onclick="openRoleForm('${r.id}')">แก้ไข</button>
-        ${r.isSystem?'':`<button class="btn btn-danger btn-sm" onclick="deleteRole('${r.id}')">ลบ</button>`}
-      </div>
-    </div>`;
-  }).join('') : `<div class="empty">ยังไม่มี Role</div>`;
-}
-function openRoleForm(id){
-  const r = id ? DB.roles.find(x=>x.id===id) : null;
-  const perms = r ? r.permissions : MENUS.map(m=>m.key);
-  const locked = r && r.isSystem;
-  openModal(`
-    <div class="modal-head"><h3>${r?'แก้ไข Role':'เพิ่ม Role'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    ${locked ? `<div class="hint">Role นี้เป็น Role ระบบ (Superadmin) มองเห็นทุกเมนูเสมอและไม่สามารถเปลี่ยนชื่อหรือลบได้</div>` : ''}
-    <label>ชื่อ Role <span class="req">*</span></label>
-    <input type="text" id="rf-name" value="${r?esc(r.name):''}" ${locked?'disabled':''}>
-    <label>สิทธิ์การมองเห็นเมนู (Permission) เริ่มต้นของ Role นี้</label>
-    <div class="perm-grid">
-      ${MENUS.map(m=>`<label class="perm-item"><input type="checkbox" data-rperm="${m.key}" ${perms.includes(m.key)?'checked':''} ${locked?'disabled':''}> ${m.em} ${m.label}</label>`).join('')}
-    </div>
-    <div class="hint">สิทธิ์นี้ใช้เป็นค่าเริ่มต้นเวลาสร้างผู้ใช้งานใหม่ที่เลือก Role นี้ — ผู้ใช้แต่ละคนยังปรับสิทธิ์ของตัวเองแยกได้ที่หน้าจัดการผู้ใช้งาน</div>
-    ${locked ? '' : `<button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveRole(${r?`'${r.id}'`:'null'})">บันทึก</button>`}
-  `);
-}
-function saveRole(id){
-  const name = document.getElementById('rf-name').value.trim();
-  if(!name){ toast('กรุณากรอกชื่อ Role'); return; }
-  const dup = DB.roles.find(x=>x.name===name && x.id!==id);
-  if(dup){ toast('มีชื่อ Role นี้อยู่แล้ว'); return; }
-  const perms = Array.from(document.querySelectorAll('[data-rperm]')).filter(c=>c.checked).map(c=>c.dataset.rperm);
-  const now = Date.now();
-  if(id){
-    const r = DB.roles.find(x=>x.id===id);
-    const oldName = r.name;
-    r.name = name; r.permissions = perms; r.updatedBy=SESSION.username; r.updatedAt=now;
-    if(oldName!==name){
-      DB.users.forEach(u=>{ if(u.role===oldName) u.role = name; });
-      if(SESSION.role===oldName) SESSION.role = name;
-    }
-    logActivity('แก้ไข Role', `แก้ไข Role ${name}`);
-  } else {
-    DB.roles.push({id:uid(), name, permissions:perms, isSystem:false, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่ม Role', `เพิ่ม Role ${name}`);
-  }
-  saveDB(); closeModal(); renderRoleList();
-}
-function deleteRole(id){
-  const r = DB.roles.find(x=>x.id===id);
-  if(r.isSystem){ toast('ไม่สามารถลบ Role ระบบได้'); return; }
-  const inUse = DB.users.filter(u=>u.role===r.name).length;
-  if(inUse>0){ toast(`ไม่สามารถลบได้ เนื่องจากมีผู้ใช้งาน ${inUse} คนใช้ Role นี้อยู่`); return; }
-  if(!confirm('ยืนยันการลบ Role นี้?')) return;
-  DB.roles = DB.roles.filter(x=>x.id!==id);
-  logActivity('ลบ Role', `ลบ Role ${r.name}`);
-  saveDB(); renderRoleList();
-}
-function applyRoleDefaults(){
-  const roleName = document.getElementById('uf-role').value;
-  const role = DB.roles.find(r=>r.name===roleName);
-  if(!role) return;
-  document.querySelectorAll('[data-perm]').forEach(cb=>{ cb.checked = role.permissions.includes(cb.dataset.perm); });
-  toast('โหลดสิทธิ์เริ่มต้นจาก Role แล้ว');
-}
-function renderUserList(){
-  document.getElementById('user-list').innerHTML = DB.users.map(u=>`
+    <div class="card" id="user-list-card"></div>`;
+  document.getElementById('user-list-card').innerHTML = DB.users.map(u=>`
     <div class="list-item">
       ${u.image?`<img class="thumb" src="${u.image}">`:`<div class="thumb ph">👤</div>`}
       <div class="grow">
-        <div class="li-title">${esc(u.name)} <span class="badge ${u.active?'ok':'off'}">${u.active?'เปิดใช้งาน':'ปิดใช้งาน'}</span></div>
-        <div class="li-sub">${esc(u.username)} · ${esc(u.role)}</div>
+        <div class="li-title">${esc(u.name)} (${esc(u.username)}) <span class="badge ${u.active?'ok':'off'}">${u.active?'ใช้งานอยู่':'ปิดใช้งาน'}</span></div>
+        <div class="li-sub">ตำแหน่ง/สิทธิ์: ${esc(u.role)} · โทร ${esc(u.phone||'-')}</div>
       </div>
       <div class="li-actions">
         <button class="btn btn-outline btn-sm" onclick="openUserForm('${u.id}')">แก้ไข</button>
-        ${u.id!=='u_admin'?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">ลบ</button>`:''}
+        ${u.username==='Superadmin'?'':`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">ลบ</button>`}
       </div>
     </div>`).join('');
 }
 function openUserForm(id){
   const u = id ? DB.users.find(x=>x.id===id) : null;
   currentEditImg.user = u?u.image:'';
-  const perms = u ? (u.permissions||[]) : MENUS.map(m=>m.key);
+  const roleOpts = DB.roles.map(r=>`<option ${u&&u.role===r.name?'selected':''}>${esc(r.name)}</option>`).join('');
   openModal(`
     <div class="modal-head"><h3>${u?'แก้ไขผู้ใช้งาน':'เพิ่มผู้ใช้งาน'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
     <label>Username <span class="req">*</span></label>
-    <input type="text" id="uf-username" value="${u?esc(u.username):''}">
-    <label>Password <span class="req">*</span></label>
-    <input type="text" id="uf-password" value="${u?esc(u.password):''}">
-    <label>ชื่อ <span class="req">*</span></label>
+    <input type="text" id="uf-user" value="${u?esc(u.username):''}" ${u&&u.username==='Superadmin'?'readonly':''}>
+    <label>Password ${u?'(เว้นว่างไว้หากไม่ต้องการเปลี่ยน)':''}</label>
+    <input type="password" id="uf-pass" placeholder="${u?'รหัสผ่านใหม่ (ถ้ามี)':''}">
+    <label>ชื่อ-นามสกุล <span class="req">*</span></label>
     <input type="text" id="uf-name" value="${u?esc(u.name):''}">
-    <label>เบอร์โทร <span class="req">*</span></label>
-    <input type="tel" id="uf-phone" maxlength="10" value="${u?esc(u.phone):''}">
-    <div class="hint">กรอกได้เฉพาะตัวเลข 10 หลัก</div>
+    <label>เบอร์โทร</label>
+    <input type="tel" id="uf-phone" maxlength="10" value="${u?esc(u.phone||''):''}">
+    <label>กลุ่มสิทธิ์การใช้งาน</label>
+    <select id="uf-role" onchange="onRoleSelectChange()">${roleOpts}</select>
     <label>รูปภาพโปรไฟล์</label>
-    ${uploadBoxHTML('uf-imgbox','user', u?u.image:'', 'แตะเพื่ออัปโหลดรูปโปรไฟล์')}
-    <label>Role</label>
-    <div class="row">
-      <select id="uf-role" class="grow">${DB.roles.map(r=>`<option ${u&&u.role===r.name?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="applyRoleDefaults()">โหลดสิทธิ์เริ่มต้น</button>
-    </div>
-    <div class="hint">ไม่พบ Role ที่ต้องการ? ไปที่แท็บ "🔑 จัดการ Role" เพื่อเพิ่ม Role ใหม่ได้</div>
-    <label>สิทธิ์การมองเห็นเมนู (Permission)</label>
-    <div class="perm-grid">
-      ${MENUS.map(m=>`<label class="perm-item"><input type="checkbox" data-perm="${m.key}" ${perms.includes(m.key)?'checked':''}> ${m.em} ${m.label}</label>`).join('')}
-    </div>
+    ${uploadBoxHTML('uf-imgbox','user', u?u.image:'', 'แตะเพื่ออัปโหลดภาพโปรไฟล์')}
     <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
       <label class="switch"><input type="checkbox" id="uf-active" ${(!u||u.active)?'checked':''}><span class="slider"></span></label>
       เปิดใช้งานบัญชีนี้
@@ -1811,62 +1632,129 @@ function openUserForm(id){
   `);
 }
 function saveUser(id){
-  const username = document.getElementById('uf-username').value.trim();
-  const password = document.getElementById('uf-password').value;
+  const username = document.getElementById('uf-user').value.trim();
+  const pass = document.getElementById('uf-pass').value;
   const name = document.getElementById('uf-name').value.trim();
   const phone = document.getElementById('uf-phone').value.trim();
-  if(!username||!password||!name||!phone){ toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
-  if(!/^\d{10}$/.test(phone)){ toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก'); return; }
-  const dup = DB.users.find(x=>x.username===username && x.id!==id);
-  if(dup){ toast('Username นี้ถูกใช้งานแล้ว'); return; }
-  const perms = Array.from(document.querySelectorAll('[data-perm]')).filter(c=>c.checked).map(c=>c.dataset.perm);
+  const roleName = document.getElementById('uf-role').value;
+  if(!username || !name){ toast('กรุณากรอก Username และชื่อ-นามสกุล'); return; }
+  const roleObj = DB.roles.find(r=>r.name===roleName);
+  const permissions = roleObj ? roleObj.permissions : MENUS.map(m=>m.key);
   const now = Date.now();
   if(id){
     const u = DB.users.find(x=>x.id===id);
-    u.username=username; u.password=password; u.name=name; u.phone=phone;
-    u.image=currentEditImg.user||u.image||''; u.role=document.getElementById('uf-role').value;
-    u.permissions=perms; u.active=document.getElementById('uf-active').checked;
-    u.updatedBy=SESSION.username; u.updatedAt=now;
-    logActivity('แก้ไขผู้ใช้งาน', `แก้ไขผู้ใช้งาน ${username}`);
-    if(SESSION.userId===id){ SESSION.permissions=perms; SESSION.role=u.role; renderNav(); }
+    u.username = username;
+    if(pass) u.password = pass;
+    u.name = name; u.phone = phone; u.role = roleName; u.permissions = permissions;
+    u.image = currentEditImg.user || u.image || '';
+    u.active = document.getElementById('uf-active').checked;
+    u.updatedBy = SESSION.username; u.updatedAt = now;
   } else {
-    DB.users.push({id:uid(), username, password, name, phone, image:currentEditImg.user||'', role:document.getElementById('uf-role').value, permissions:perms, active:document.getElementById('uf-active').checked, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่มผู้ใช้งาน', `เพิ่มผู้ใช้งาน ${username}`);
+    if(!pass){ toast('กรุณากรอก Password สำหรับผู้ใช้ใหม่'); return; }
+    if(DB.users.some(x=>x.username===username)){ toast('Username นี้มี in use แล้ว'); return; }
+    DB.users.push({
+      id: uid(), username, password: pass, name, phone, role: roleName, permissions,
+      image: currentEditImg.user || '', active: document.getElementById('uf-active').checked,
+      createdBy: SESSION.username, createdAt: now, updatedBy: SESSION.username, updatedAt: now
+    });
   }
-  saveDB(); closeModal(); renderUsers();
+  saveDB(); closeModal(); renderUserTabContent();
+  toast('บันทึกผู้ใช้งานเรียบร้อย');
 }
 function deleteUser(id){
-  if(!confirm('ยืนยันการลบผู้ใช้งานนี้?')) return;
-  const u = DB.users.find(x=>x.id===id);
+  if(!confirm('ยืนยันการลบผู้ใช้นี้?')) return;
   DB.users = DB.users.filter(x=>x.id!==id);
-  logActivity('ลบผู้ใช้งาน', `ลบผู้ใช้งาน ${u.username}`);
-  saveDB(); renderUsers();
+  saveDB(); renderUserTabContent();
+}
+
+function renderRoleListSection(){
+  document.getElementById('utab-content').innerHTML = `
+    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openRoleForm()">+ เพิ่มกลุ่มสิทธิ์</button></div>
+    <div class="card" id="role-list-card"></div>`;
+  document.getElementById('role-list-card').innerHTML = DB.roles.map(r=>`
+    <div class="list-item">
+      <div class="thumb ph">🛡️</div>
+      <div class="grow">
+        <div class="li-title">${esc(r.name)} ${r.isSystem?'<span class="badge ok">ระบบ</span>':''}</div>
+        <div class="li-sub">สิทธิ์เข้าถึง: ${(r.permissions||[]).length} เมนู</div>
+      </div>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm" onclick="openRoleForm('${r.id}')">แก้ไข</button>
+        ${r.isSystem?'':`<button class="btn btn-danger btn-sm" onclick="deleteRole('${r.id}')">ลบ</button>`}
+      </div>
+    </div>`).join('');
+}
+function openRoleForm(id){
+  const r = id ? DB.roles.find(x=>x.id===id) : null;
+  const permSet = new Set(r ? r.permissions : MENUS.map(m=>m.key));
+  const permBoxes = MENUS.map(m=>`
+    <label class="perm-item"><input type="checkbox" data-perm="${m.key}" ${permSet.has(m.key)?'checked':''}> ${m.em} ${m.label}</label>`).join('');
+
+  openModal(`
+    <div class="modal-head"><h3>${r?'แก้ไขกลุ่มสิทธิ์':'เพิ่มกลุ่มสิทธิ์'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <label>ชื่อกลุ่มสิทธิ์ <span class="req">*</span></label>
+    <input type="text" id="rf-name" value="${r?esc(r.name):''}" ${r&&r.isSystem?'readonly':''}>
+    <label style="margin-top:12px">สิทธิ์การเข้าถึงเมนู</label>
+    <div class="perm-grid">${permBoxes}</div>
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveRole(${r?`'${r.id}'`:'null'})">บันทึก</button>
+  `);
+}
+function saveRole(id){
+  const name = document.getElementById('rf-name').value.trim();
+  if(!name){ toast('กรุณากรอกชื่อกลุ่มสิทธิ์'); return; }
+  const permissions = [];
+  document.querySelectorAll('[data-perm]').forEach(cb=>{ if(cb.checked) permissions.push(cb.dataset.perm); });
+  const now = Date.now();
+  if(id){
+    const r = DB.roles.find(x=>x.id===id);
+    if(!r.isSystem) r.name = name;
+    r.permissions = permissions; r.updatedBy = SESSION.username; r.updatedAt = now;
+  } else {
+    if(DB.roles.some(x=>x.name===name)){ toast('ชื่อกลุ่มสิทธิ์นี้มีอยู่แล้ว'); return; }
+    DB.roles.push({
+      id: uid(), name, permissions, isSystem: false,
+      createdBy: SESSION.username, createdAt: now, updatedBy: SESSION.username, updatedAt: now
+    });
+  }
+  saveDB(); closeModal(); renderUserTabContent();
+  toast('บันทึกกลุ่มสิทธิ์เรียบร้อย');
+}
+function deleteRole(id){
+  const r = DB.roles.find(x=>x.id===id);
+  if(r && r.isSystem){ toast('ไม่สามารถลบกลุ่มสิทธิ์ระบบได้'); return; }
+  if(DB.users.some(u=>u.role===r.name)){ toast('มีผู้ใช้งานอยู่ในกลุ่มสิทธิ์นี้ ไม่สามารถลบได้'); return; }
+  if(!confirm('ยืนยันการลบกลุ่มสิทธิ์นี้?')) return;
+  DB.roles = DB.roles.filter(x=>x.id!==id);
+  saveDB(); renderUserTabContent();
 }
 
 /* =========================================================================
    BOOTSTRAP
    ========================================================================= */
-bootData(function(firstLoad){
+bootData((firstLoad)=>{
+  if(firstLoad){
+    // Initial check: if session exists in sessionStorage, restore
+    const savedSession = sessionStorage.getItem('posSession');
+    if(savedSession){
+      try{
+        SESSION = JSON.parse(savedSession);
+        // verify user still exists and active in DB
+        const u = DB.users.find(x=>x.username===SESSION.username && x.active);
+        if(u){
+          enterApp();
+          return;
+        }
+      }catch(e){}
+    }
+  }
+  document.getElementById('login-connecting').style.display = 'none';
+  document.getElementById('login-form-fields').style.display = 'block';
   document.getElementById('login-shopname').textContent = DB.shop.name || 'Todtingtermalatod';
-  if(firstLoad === undefined || firstLoad === true){
-    // first time data has arrived — reveal the login form and try to resume a session
-    document.getElementById('login-connecting').style.display = 'none';
-    document.getElementById('login-connect-err').style.display = 'none';
-    document.getElementById('login-form-fields').style.display = 'block';
-    try{
-      const raw = sessionStorage.getItem('posSession');
-      if(raw){
-        const s = JSON.parse(raw);
-        const u = DB.users.find(x=>x.id===s.userId && x.username===s.username);
-        if(u && u.active){ SESSION = {userId:u.id, username:u.username, name:u.name, role:u.role, permissions:u.permissions||[]}; enterApp(); }
-      }
-    }catch(e){}
-  } else {
-    // a later update (from this device or another) — just refresh what's on screen
+  // If user is already logged in, live update the view
+  if(SESSION) {
     refreshCurrentView();
   }
 });
-document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 </script>
 </body>
 </html>
