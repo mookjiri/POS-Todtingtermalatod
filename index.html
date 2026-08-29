@@ -338,6 +338,8 @@ function loadDB(){
     DB = raw ? JSON.parse(raw) : defaultDB();
     if(!DB.settings) DB.settings = {lineToken:''};
     if(!DB.seq) DB.seq = {product:0, material:0, order:0};
+    // migrate orders created before "cancel order" support
+    DB.orders.forEach(o=>{ if(!o.status) o.status = 'completed'; });
     if(!DB.roles || !DB.roles.length){
       // migrate from older data files that had no dynamic role list
       DB.roles = defaultRoles();
@@ -381,6 +383,9 @@ function calcProductCost(product){
     return sum + (mat ? Number(mat.costPerUnit||0)*Number(mu.qty||0) : 0);
   },0);
 }
+/* Orders with status 'cancelled' are excluded from revenue, dashboard and
+   profit/loss figures, but remain visible in history for audit purposes. */
+function activeOrders(){ return DB.orders.filter(o=>o.status!=='cancelled'); }
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(window._toastT); window._toastT=setTimeout(()=>t.classList.remove('show'),2200);
@@ -491,11 +496,12 @@ function renderAlertStrip(){
    ========================================================================= */
 function renderDashboard(){
   const main = document.getElementById('main');
+  const orders = activeOrders();
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayOrders = DB.orders.filter(o=>o.timestamp>=today.getTime());
+  const todayOrders = orders.filter(o=>o.timestamp>=today.getTime());
   const todayRevenue = todayOrders.reduce((s,o)=>s+o.total,0);
   const weekStart = today.getTime() - 6*86400000;
-  const weekOrders = DB.orders.filter(o=>o.timestamp>=weekStart);
+  const weekOrders = orders.filter(o=>o.timestamp>=weekStart);
   const weekRevenue = weekOrders.reduce((s,o)=>s+o.total,0);
 
   main.innerHTML = `
@@ -504,7 +510,7 @@ function renderDashboard(){
       <div class="stat"><div class="v">${money(todayRevenue)}</div><div class="l">ยอดขายวันนี้ (฿)</div></div>
       <div class="stat"><div class="v">${todayOrders.length}</div><div class="l">ออเดอร์วันนี้</div></div>
       <div class="stat"><div class="v">${money(weekRevenue)}</div><div class="l">ยอดขาย 7 วันล่าสุด</div></div>
-      <div class="stat"><div class="v">${DB.orders.length}</div><div class="l">ออเดอร์ทั้งหมด</div></div>
+      <div class="stat"><div class="v">${orders.length}</div><div class="l">ออเดอร์ทั้งหมด</div></div>
     </div>
     <div class="card">
       <div class="row wrap" style="align-items:center;justify-content:space-between">
@@ -551,7 +557,7 @@ function runDashboard(){
     end = new Date(e).setHours(23,59,59,999);
     if((end-start) > 30*86400000 + 86400000){ toast('เลือกช่วงเวลาได้ไม่เกิน 30 วัน'); return; }
   }
-  const orders = DB.orders.filter(o=>o.timestamp>=start && o.timestamp<=end);
+  const orders = activeOrders().filter(o=>o.timestamp>=start && o.timestamp<=end);
   const revenue = orders.reduce((s,o)=>s+o.total,0);
   const byProduct = {};
   orders.forEach(o=>o.items.forEach(it=>{
@@ -577,7 +583,7 @@ function runDashboard(){
   window._dashOrders = orders;
 }
 function exportExcel(){
-  const orders = window._dashOrders && window._dashOrders.length ? window._dashOrders : DB.orders;
+  const orders = window._dashOrders && window._dashOrders.length ? window._dashOrders : activeOrders();
   if(!orders.length){ toast('ไม่มีข้อมูลสำหรับ Export'); return; }
   const rows = [];
   orders.forEach(o=>{
@@ -1015,7 +1021,7 @@ function confirmPayment(pmId){
   const order = {
     id: uid(), orderNo, timestamp: Date.now(), items, total,
     paymentMethodId: pmId, paymentMethodName: pm.name, isCash: !!pm.cash,
-    received, change, cashier: SESSION.username
+    received, change, cashier: SESSION.username, status:'completed'
   };
   DB.orders.unshift(order);
   logActivity('ชำระเงินสำเร็จ', `Order ${orderNo} ยอดรวม ฿${money(total)} โดย ${SESSION.username}`);
@@ -1030,8 +1036,10 @@ function confirmPayment(pmId){
    ========================================================================= */
 function receiptHTML(order){
   const rows = order.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${it.qty}</td><td>฿${money(it.price)}</td><td>฿${money(it.qty*it.price)}</td></tr>`).join('');
+  const cancelled = order.status==='cancelled';
   return `
-    <div class="receipt" id="receipt-capture">
+    <div class="receipt" id="receipt-capture" style="position:relative">
+      ${cancelled ? `<div style="position:absolute;top:14px;right:-6px;background:var(--danger);color:#fff;padding:4px 26px;font-size:11px;font-weight:700;transform:rotate(18deg);box-shadow:0 2px 6px rgba(0,0,0,.2)">ยกเลิกแล้ว</div>` : ''}
       <div class="rhead">
         ${DB.shop.image?`<img src="${DB.shop.image}">`:''}
         <h3>${esc(DB.shop.name)}</h3>
@@ -1046,6 +1054,7 @@ function receiptHTML(order){
       <p style="margin-top:8px">ชำระโดย: ${esc(order.paymentMethodName)}</p>
       ${order.isCash ? `<p>รับเงิน: ฿${money(order.received)} · ทอน: ฿${money(order.change)}</p>` : ''}
       <p>ผู้คิดเงิน: ${esc(order.cashier)}</p>
+      ${cancelled ? `<div class="divider"></div><p style="color:var(--danger)">ยกเลิกโดย: ${esc(order.cancelledBy||'-')} เมื่อ ${order.cancelledAt?fmtDateTime(order.cancelledAt):'-'}</p>${order.cancelReason?`<p style="color:var(--danger)">เหตุผล: ${esc(order.cancelReason)}</p>`:''}` : ''}
     </div>`;
 }
 function showReceiptById(orderId){
@@ -1111,16 +1120,82 @@ function renderHistory(){
 function renderHistoryList(){
   const q = (document.getElementById('hist-search').value||'').toLowerCase();
   const list = DB.orders.filter(o=>o.orderNo.toLowerCase().includes(q));
-  document.getElementById('hist-list').innerHTML = list.length ? list.map(o=>`
-    <div class="card" style="padding:12px 14px">
+  document.getElementById('hist-list').innerHTML = list.length ? list.map(o=>{
+    const cancelled = o.status==='cancelled';
+    return `
+    <div class="card" style="padding:12px 14px${cancelled?';opacity:.75':''}">
       <div class="row" style="justify-content:space-between;align-items:center">
-        <b>${o.orderNo}</b><span class="badge ok">฿${money(o.total)}</span>
+        <b>${o.orderNo}</b>
+        ${cancelled ? `<span class="badge danger">ยกเลิกแล้ว</span>` : `<span class="badge ok">฿${money(o.total)}</span>`}
       </div>
       <div class="li-sub">${fmtDateTime(o.timestamp)} · ${o.items.reduce((s,i)=>s+i.qty,0)} ชิ้น · ${esc(o.paymentMethodName)} · โดย ${esc(o.cashier)}</div>
+      ${cancelled ? `<div class="li-sub" style="color:var(--danger)">ยกเลิกโดย ${esc(o.cancelledBy||'-')} · ${o.cancelledAt?fmtDateTime(o.cancelledAt):''}${o.cancelReason?' · เหตุผล: '+esc(o.cancelReason):''}</div>` : ''}
       <div class="row" style="margin-top:8px">
         <button class="btn btn-outline btn-sm grow" onclick="showReceiptById('${o.id}')">ดูใบเสร็จ</button>
+        ${cancelled ? '' : `<button class="btn btn-danger btn-sm grow" onclick="openCancelOrder('${o.id}')">ยกเลิก Order</button>`}
       </div>
-    </div>`).join('') : `<div class="empty">ยังไม่มีประวัติการขาย</div>`;
+    </div>`;
+  }).join('') : `<div class="empty">ยังไม่มีประวัติการขาย</div>`;
+}
+function openCancelOrder(orderId){
+  const o = DB.orders.find(x=>x.id===orderId);
+  if(!o || o.status==='cancelled') return;
+  openModal(`
+    <div class="modal-head"><h3>ยกเลิก Order ${o.orderNo}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <div class="hint">การยกเลิกจะคืนจำนวนสินค้าและวัตถุดิบที่ตัดสต็อกไปแล้วกลับเข้าคลังทั้งหมด ยอดขายของ Order นี้จะไม่ถูกนับในภาพรวม/กำไร-ขาดทุนอีกต่อไป แต่ยังคงเก็บประวัติไว้เพื่อการตรวจสอบ</div>
+    <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>สินค้า</th><th>จำนวน</th><th>รวม</th></tr>
+    ${o.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${it.qty}</td><td>฿${money(it.qty*it.price)}</td></tr>`).join('')}
+    </table></div>
+    <div class="row" style="justify-content:space-between;font-weight:700;margin-top:8px"><span>ยอดรวม</span><span>฿${money(o.total)}</span></div>
+    <label>เหตุผลในการยกเลิก <span class="req">*</span></label>
+    <textarea id="cancel-reason" placeholder="เช่น ลูกค้าสั่งผิด, สินค้าชำรุด ฯลฯ"></textarea>
+    <div class="field-err" id="cancel-reason-err" style="display:none">กรุณาระบุเหตุผลในการยกเลิก</div>
+    <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="confirmCancelOrder('${o.id}')">ยืนยันยกเลิก Order</button>
+  `);
+}
+function confirmCancelOrder(orderId){
+  const reason = document.getElementById('cancel-reason').value.trim();
+  if(!reason){ document.getElementById('cancel-reason-err').style.display='block'; return; }
+  const o = DB.orders.find(x=>x.id===orderId);
+  if(!o || o.status==='cancelled') { closeModal(); return; }
+  if(!confirm(`ยืนยันยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)}? การกระทำนี้จะคืนสต็อกสินค้าและวัตถุดิบกลับเข้าคลัง`)) return;
+
+  // restore product stock
+  o.items.forEach(it=>{
+    const p = DB.products.find(x=>x.id===it.productId);
+    if(p){
+      p.qty += it.qty;
+      // restore materials used by this product's recipe
+      (p.materials||[]).forEach(mu=>{
+        const mat = DB.materials.find(x=>x.id===mu.materialId);
+        if(mat){
+          mat.qty += mu.qty*it.qty;
+          mat.log = mat.log||[];
+          mat.log.push({time:Date.now(), type:'in', qty:mu.qty*it.qty, user:SESSION.username, note:`คืนสต็อกจากการยกเลิก Order ${o.orderNo}`});
+        }
+      });
+    }
+  });
+  o.status = 'cancelled';
+  o.cancelledBy = SESSION.username;
+  o.cancelledAt = Date.now();
+  o.cancelReason = reason;
+  logActivity('ยกเลิก Order', `ยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)} เหตุผล: ${reason}`);
+  saveDB();
+  sendLineNotifyCancel(o);
+  closeModal();
+  renderHistoryList();
+  toast('ยกเลิก Order และคืนสต็อกเรียบร้อยแล้ว');
+}
+function sendLineNotifyCancel(order){
+  const token = DB.settings.lineToken;
+  if(!token) return;
+  const msg = `\nOrder ${order.orderNo} ถูกยกเลิก\nยอดรวม ฿${money(order.total)}\nยกเลิกโดย: ${order.cancelledBy}\nเหตุผล: ${order.cancelReason}`;
+  fetch('https://notify-api.line.me/api/notify', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':'Bearer '+token},
+    body:'message='+encodeURIComponent(msg)
+  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ (อาจติด CORS — ต้องใช้ Proxy ฝั่งเซิร์ฟเวอร์)'); });
 }
 function clearHistory(){
   if(!confirm('ยืนยันการล้างประวัติการขายทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
@@ -1182,7 +1257,7 @@ function getProfitRangeBounds(){
 function computeProfitData(){
   const bounds = getProfitRangeBounds();
   if(!bounds){ toast('กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด'); return null; }
-  const orders = DB.orders.filter(o=>o.timestamp>=bounds.start && o.timestamp<=bounds.end);
+  const orders = activeOrders().filter(o=>o.timestamp>=bounds.start && o.timestamp<=bounds.end);
   const byProduct = {};
   orders.forEach(o=>o.items.forEach(it=>{
     const product = DB.products.find(p=>p.id===it.productId);
