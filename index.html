@@ -3,136 +3,80 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Todtingtermalatod POS</title>
+<title>Debt Freedom — ระบบช่วยปลดหนี้</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<!-- Firebase (compat SDK — kept simple so the rest of the app's code barely changes) -->
+<!-- Firebase (compat build – simple global API, no bundler needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<!-- SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Chart.js for trend / breakdown charts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 :root{
-  --ink:#0F2A2E;
-  --teal-900:#0B3B36;
-  --teal-700:#0F6B5C;
-  --teal-600:#137A68;
-  --teal-100:#E4F3EF;
-  --amber:#E8A33D;
-  --amber-ink:#5C3A0A;
-  --paper:#F6F5F1;
-  --card:#FFFFFF;
-  --line:#E2E1DA;
-  --danger:#C1502E;
-  --danger-bg:#FBE9E3;
-  --muted:#6B7A78;
-  --radius:14px;
-  --shadow:0 2px 10px rgba(15,42,46,.08);
+  --ink:#10241F; --teal-900:#0B3B36; --teal-700:#0F6B5C; --teal-600:#137A68; --teal-100:#E4F3EF;
+  --amber:#E8A33D; --amber-ink:#5C3A0A; --paper:#F6F5F1; --card:#FFFFFF; --line:#E2E1DA;
+  --danger:#C1502E; --danger-bg:#FBE9E3; --warn:#B9791B; --warn-bg:#FDF0DA;
+  --good:#1E8E5A; --good-bg:#E4F4EA; --muted:#6B7A78; --radius:14px; --shadow:0 2px 10px rgba(15,42,46,.08);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
-body{
-  font-family:'Sarabun',sans-serif;
-  background:var(--paper);
-  color:var(--ink);
-  -webkit-tap-highlight-color:transparent;
-  overscroll-behavior:none;
-}
+body{font-family:'Sarabun',sans-serif;background:var(--paper);color:var(--ink);-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
 h1,h2,h3,.disp{font-family:'Kanit',sans-serif}
 button,input,select,textarea{font-family:inherit;font-size:15px}
 button{cursor:pointer}
-a{color:var(--teal-700)}
 ::-webkit-scrollbar{width:0;height:0}
 
-/* ===== Layout shell ===== */
-#app{display:none;height:100dvh;flex-direction:column}
-#app.show{display:flex}
-.topbar{
-  background:var(--teal-900);color:#fff;
-  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
-  flex-shrink:0;
-}
-.topbar .shopname{font-family:'Kanit',sans-serif;font-weight:600;font-size:17px;display:flex;align-items:center;gap:8px}
-.topbar .shopname img{width:28px;height:28px;border-radius:8px;object-fit:cover}
-.topbar .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;opacity:.9}
-.icon-btn{background:rgba(255,255,255,.12);border:none;color:#fff;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;transition:background-color .15s ease}
-.icon-btn:hover{background:rgba(255,255,255,.22)}
-.alert-strip{background:var(--danger-bg);color:var(--danger);font-size:13px;padding:8px 16px;display:none;flex-shrink:0;font-weight:600}
+#app{display:none;height:100dvh}
+#app.show{display:flex;flex-direction:column}
+.main-col{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:#fff;color:var(--ink);padding:18px 18px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--line)}
+.topbar .brand{font-family:'Kanit',sans-serif;font-weight:600;font-size:17px;display:flex;align-items:center;gap:8px;color:var(--teal-900)}
+.topbar .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.icon-btn{background:none;border:1px solid var(--line);color:var(--ink);width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.alert-strip{background:var(--warn-bg);color:var(--warn-ink,#8A5A0B);font-size:13px;padding:8px 16px;display:none;flex-shrink:0;font-weight:600}
 .alert-strip.show{display:block}
+#main{flex:1;overflow-y:auto;padding:14px 14px 88px 14px;width:100%;max-width:760px;margin:0 auto}
+.bottomnav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;overflow-x:auto;z-index:50;padding:0}
+.nav-btn{flex:1;min-width:0;background:none;border:none;border-top:2px solid transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px 8px;font-size:10.5px;transition:.15s}
+.nav-btn .em{font-size:19px;opacity:.75}
+.nav-btn.active{color:var(--teal-700);border-top-color:var(--teal-700)}
+.nav-btn.active .em{opacity:1}
 
-#main{flex:1;overflow-y:auto;padding:14px 14px 90px 14px}
-.bottomnav{
-  position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
-  display:flex;overflow-x:auto;z-index:50;padding:4px 2px;gap:2px;
-  box-shadow:0 -2px 10px rgba(0,0,0,.05);
+@media(min-width:700px){
+  #main{padding:28px 24px 88px}
+  .nav-btn{font-size:11.5px}
 }
-.nav-btn{flex:0 0 auto;min-width:66px;background:none;border:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 8px;border-radius:10px;font-size:11px;transition:background-color .15s ease,color .15s ease}
-.nav-btn .em{font-size:19px}
-.nav-btn:hover{background:var(--teal-100);color:var(--teal-700)}
-.nav-btn.active{color:var(--teal-700);background:var(--teal-100)}
 
-/* ===== Tablet / desktop: side rail navigation ===== */
-@media (min-width:900px){
-  #app{flex-direction:row}
-  .bottomnav{
-    position:fixed;left:0;top:0;bottom:0;right:auto;width:236px;height:100dvh;
-    flex-direction:column;align-items:stretch;justify-content:flex-start;
-    padding:86px 12px 16px;gap:3px;border-top:none;border-right:1px solid var(--line);
-    overflow-y:auto;overflow-x:hidden;box-shadow:none;
-  }
-  .nav-btn{flex-direction:row;justify-content:flex-start;gap:11px;padding:11px 14px;font-size:13.5px;min-width:0}
-  .nav-btn .em{font-size:18px}
-  .topbar{position:fixed;left:236px;right:0;top:0;z-index:40}
-  .alert-strip{position:fixed;left:236px;right:0;top:57px;z-index:39}
-  #main{margin-left:236px;padding:26px 32px 48px;max-width:1180px;margin-top:57px}
-  .cart-fab{left:calc(236px + 20px);right:24px;bottom:24px;max-width:640px;margin:0 auto}
-  .prod-grid{grid-template-columns:repeat(4,1fr)}
-  .stat-grid{grid-template-columns:repeat(4,1fr)}
-  .sidebar-brand{display:flex}
-  .topbar .shopname{display:none}
-  .topbar{justify-content:flex-end}
-}
-.sidebar-brand{
-  display:none;position:fixed;left:0;top:0;width:236px;padding:16px 18px;align-items:center;gap:10px;
-  font-family:'Kanit',sans-serif;font-weight:700;font-size:15px;color:var(--teal-900);z-index:41;
-  border-bottom:1px solid var(--line);border-right:1px solid var(--line);background:#fff;height:57px;box-sizing:border-box;
-}
-.sidebar-brand img{width:26px;height:26px;border-radius:7px;object-fit:cover}
-
-/* ===== Common components ===== */
-.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
 .page-title{font-family:'Kanit',sans-serif;font-size:20px;font-weight:600;margin:2px 0 14px 0;color:var(--teal-900)}
 .row{display:flex;gap:10px}
 .row.wrap{flex-wrap:wrap}
 .grow{flex:1}
-.btn{border:none;border-radius:11px;padding:11px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.btn{border:none;border-radius:11px;padding:11px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;justify-content:center;transition:filter .15s}
+.btn:hover{filter:brightness(1.05)}
 .btn-primary{background:var(--teal-700);color:#fff}
 .btn-primary:disabled{background:#B9C9C6;color:#fff;cursor:not-allowed}
 .btn-amber{background:var(--amber);color:var(--amber-ink)}
-.btn-ghost{background:var(--teal-100);color:var(--teal-800,var(--teal-700))}
+.btn-ghost{background:var(--teal-100);color:var(--teal-700)}
 .btn-danger{background:var(--danger-bg);color:var(--danger)}
 .btn-outline{background:#fff;border:1px solid var(--line);color:var(--ink)}
 .btn-sm{padding:7px 11px;font-size:13px;border-radius:9px}
 .btn-block{width:100%}
 label{font-size:13px;font-weight:600;color:var(--teal-900);display:block;margin:10px 0 5px}
-input[type=text],input[type=number],input[type=password],input[type=tel],input[type=date],textarea,select{
+input[type=text],input[type=number],input[type=password],input[type=date],textarea,select{
   width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
 }
+input:focus,select:focus,textarea:focus{outline:2px solid var(--teal-600);outline-offset:1px}
 textarea{resize:vertical;min-height:60px}
 .req{color:var(--danger)}
 .field-err{color:var(--danger);font-size:12px;margin-top:4px}
 .hint{color:var(--muted);font-size:12px;margin-top:4px}
-.switch{position:relative;width:46px;height:26px;flex-shrink:0}
-.switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;inset:0;background:#D8D6CC;border-radius:20px;transition:.2s}
-.slider:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
-.switch input:checked + .slider{background:var(--teal-600)}
-.switch input:checked + .slider:before{transform:translateX(20px)}
 .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600}
-.badge.ok{background:var(--teal-100);color:var(--teal-700)}
+.badge.ok{background:var(--good-bg);color:var(--good)}
 .badge.off{background:#EFEEE7;color:var(--muted)}
-.badge.warn{background:#FDF0DA;color:#8A5A0B}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
 .badge.danger{background:var(--danger-bg);color:var(--danger)}
 .empty{text-align:center;color:var(--muted);padding:34px 10px;font-size:14px}
 .divider{height:1px;background:var(--line);margin:12px 0}
@@ -140,146 +84,137 @@ textarea{resize:vertical;min-height:60px}
 .searchbar input{flex:1}
 .list-item{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .list-item:last-child{border-bottom:none}
-.thumb{width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--teal-100);flex-shrink:0}
-.thumb.ph{display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--teal-600)}
 .li-title{font-weight:600;font-size:14.5px}
 .li-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
-.li-actions{display:flex;gap:6px;flex-shrink:0}
-.upload-box{border:1.5px dashed var(--line);border-radius:12px;padding:14px;text-align:center;color:var(--muted);font-size:13px;position:relative;cursor:pointer}
-.upload-box img{max-width:100%;max-height:140px;border-radius:8px;margin-top:8px}
-.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.li-actions{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.thumb.ph{width:44px;height:44px;border-radius:10px;background:var(--teal-100);display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--teal-600);flex-shrink:0}
 
-/* modal */
 .modal-bg{position:fixed;inset:0;background:rgba(15,42,46,.45);display:none;align-items:flex-end;justify-content:center;z-index:200}
 .modal-bg.show{display:flex}
-.modal{background:#fff;border-radius:18px 18px 0 0;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:18px;animation:slideup .18s ease-out}
+.modal{background:#fff;border-radius:18px 18px 0 0;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:18px;animation:slideup .18s ease-out}
 @media(min-width:640px){.modal-bg{align-items:center}.modal{border-radius:18px}}
 @keyframes slideup{from{transform:translateY(24px);opacity:.6}to{transform:translateY(0);opacity:1}}
 .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .modal-head h3{margin:0;font-size:18px}
 .close-x{background:none;border:none;font-size:22px;color:var(--muted);line-height:1}
 
-/* login */
-#login-screen{height:100dvh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--teal-900),var(--teal-700));padding:20px}
-.login-card{background:#fff;border-radius:20px;padding:30px 26px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
-.login-card h1{text-align:center;color:var(--teal-900);font-size:22px;margin:6px 0 2px}
+#login-screen{height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--paper);padding:20px}
+.login-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:30px 26px;width:100%;max-width:360px}
+.login-card h1{text-align:center;color:var(--teal-900);font-size:21px;margin:6px 0 2px}
 .login-card p.sub{text-align:center;color:var(--muted);font-size:13px;margin:0 0 18px}
 .login-logo{width:56px;height:56px;background:var(--teal-100);border-radius:16px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--teal-700)}
 
-/* tables */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:600;font-size:12.5px}
 .tbl-wrap{overflow-x:auto}
 
-/* sell grid */
-.prod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-@media(min-width:520px){.prod-grid{grid-template-columns:repeat(3,1fr)}}
-.prod-card{background:#fff;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
-.prod-card .pimg{height:96px;background:var(--teal-100);display:flex;align-items:center;justify-content:center;color:var(--teal-600);font-size:26px;overflow:hidden}
-.prod-card .pimg img{width:100%;height:100%;object-fit:cover}
-.prod-card .pbody{padding:9px 10px 11px;display:flex;flex-direction:column;gap:4px;flex:1}
-.prod-card .pname{font-weight:600;font-size:13.5px;line-height:1.25}
-.prod-card .pdesc{font-size:11px;color:var(--muted);min-height:14px}
-.prod-card .pprice{font-weight:700;color:var(--teal-700);font-size:14px}
-.prod-card .pstock{font-size:11px;color:var(--muted)}
-.prod-card.disabled{opacity:.45;pointer-events:none}
-.qty-stepper{display:flex;align-items:center;justify-content:space-between;background:var(--teal-100);border-radius:9px;overflow:hidden}
-.qty-stepper button{background:none;border:none;color:var(--teal-700);font-weight:700;width:30px;height:30px}
-.qty-stepper .n{font-weight:700;font-size:13px}
-
-.cart-fab{position:fixed;left:14px;right:14px;bottom:72px;background:var(--teal-700);color:#fff;border-radius:14px;padding:12px 16px;display:none;align-items:center;justify-content:space-between;box-shadow:0 6px 20px rgba(15,42,46,.3);z-index:40}
-.cart-fab.show{display:flex}
-
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.stat{background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:14px}
-.stat .v{font-family:'Kanit',sans-serif;font-size:20px;font-weight:700;color:var(--teal-900)}
+@media(min-width:700px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .v{font-family:'Kanit',sans-serif;font-size:19px;font-weight:700;color:var(--teal-900)}
 .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+.stat.accent .v{color:var(--amber-ink)}
+
+.progress-track{height:12px;background:var(--teal-100);border-radius:20px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--teal-600),var(--teal-700));border-radius:20px;transition:width .3s}
 
 .tabs{display:flex;gap:6px;margin-bottom:12px;background:var(--teal-100);padding:4px;border-radius:11px}
 .tab{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:13px;font-weight:600;color:var(--teal-700);background:none;border:none}
-.tab.active{background:#fff;box-shadow:var(--shadow)}
+.tab.active{background:#fff;border:1px solid var(--line)}
 
-.receipt{background:#fff;padding:20px;border-radius:12px;font-size:13px;max-width:340px;margin:0 auto}
-.receipt .rhead{text-align:center;margin-bottom:10px}
-.receipt .rhead img{width:44px;height:44px;border-radius:10px;object-fit:cover;margin-bottom:6px}
-.receipt .rhead h3{margin:2px 0;font-size:15px}
-.receipt .rhead p{margin:1px 0;font-size:11.5px;color:var(--muted)}
-.receipt table{font-size:12px}
-.receipt .rtotal{display:flex;justify-content:space-between;font-weight:700;font-size:14px;margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.strategy-card{border:2px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:.15s}
+.strategy-card.active{border-color:var(--teal-600);background:var(--teal-100)}
+.strategy-card h4{margin:0 0 4px;font-family:'Kanit',sans-serif;font-size:15px;color:var(--teal-900)}
+.strategy-card p{margin:0;font-size:12.5px;color:var(--muted)}
+
+.timeline{position:relative;padding-left:22px}
+.timeline::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--line)}
+.tl-item{position:relative;padding-bottom:16px}
+.tl-item::before{content:'';position:absolute;left:-22px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--teal-600);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.tl-item.done::before{background:var(--good)}
+
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;z-index:400;opacity:0;transition:.25s;pointer-events:none}
 .toast.show{opacity:1;bottom:100px}
-.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.perm-item{display:flex;align-items:center;gap:8px;background:var(--paper);padding:8px 10px;border-radius:9px;font-size:12.5px}
 .check-alert{background:var(--danger-bg);border-radius:10px;padding:9px 12px;color:var(--danger);font-size:12.5px;margin-bottom:10px;display:none}
 .check-alert.show{display:block}
+.slider-wrap{padding:6px 4px}
+input[type=range]{width:100%;accent-color:var(--teal-700)}
+.switch{position:relative;width:46px;height:26px;flex-shrink:0;display:inline-block}
+.switch input{opacity:0;width:0;height:0}
+.slider-toggle{position:absolute;inset:0;background:#D8D6CC;border-radius:20px;transition:.2s}
+.slider-toggle:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .slider-toggle{background:var(--teal-600)}
+.switch input:checked + .slider-toggle:before{transform:translateX(20px)}
 
-/* ===== Interaction polish: hover / focus / active states ===== */
-.btn{transition:filter .15s ease,transform .05s ease}
-.btn:hover:not(:disabled){filter:brightness(0.96)}
-.btn:active:not(:disabled){transform:scale(.98)}
-.btn-outline:hover:not(:disabled){background:var(--paper)}
-.list-item{transition:background-color .15s ease}
-.prod-card{transition:box-shadow .15s ease,transform .1s ease}
-.prod-card:not(.disabled):hover{box-shadow:0 6px 18px rgba(15,42,46,.14);transform:translateY(-1px)}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.upload-box:focus-within{
-  outline:2px solid var(--teal-600);outline-offset:2px;
-}
-input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input[type=tel]:focus,input[type=date]:focus,textarea:focus,select:focus{
-  border-color:var(--teal-600);
-}
-
-/* ===== Print: receipt only ===== */
-@media print{
-  body *{visibility:hidden}
-  #receipt-capture,#receipt-capture *{visibility:visible}
-  #receipt-capture{position:absolute;left:0;top:0;width:100%;box-shadow:none;margin:0}
-  .modal-bg{position:absolute;background:none}
-  .modal{box-shadow:none;padding:0;max-height:none;overflow:visible}
-}
+/* ---- history / filters / analysis / sync (added) ---- */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.filter-bar select,.filter-bar input[type=date]{width:auto;flex:1;min-width:110px}
+.seg{display:flex;background:var(--teal-100);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{flex:1;min-width:56px;border:none;background:none;padding:7px 8px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--teal-700)}
+.seg button.active{background:#fff;border:1px solid var(--line)}
+.tx-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.tx-item:last-child{border-bottom:none}
+.tx-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.tx-ico.income{background:var(--good-bg);color:var(--good)}
+.tx-ico.expense{background:var(--danger-bg);color:var(--danger)}
+.tx-amt{font-weight:700;font-size:14px;white-space:nowrap}
+.tx-amt.income{color:var(--good)}
+.tx-amt.expense{color:var(--danger)}
+.chart-wrap{position:relative;height:220px;margin-top:10px}
+.rec-card{border-left:4px solid var(--amber);background:#FFF8EC;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.rec-card b{font-size:13.5px;color:var(--amber-ink)}
+.rec-card p{margin:5px 0 0;font-size:12.5px;color:var(--ink)}
+.insight-card{border-left:4px solid var(--teal-600);background:var(--paper);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.insight-card.danger{border-left-color:var(--danger);background:var(--danger-bg)}
+.insight-card.opportunity{border-left-color:var(--amber);background:#FFF8EC}
+.insight-card.success{border-left-color:var(--good);background:var(--good-bg)}
+.insight-card .it{font-weight:700;font-size:13.5px}
+.insight-card .id{font-size:12.5px;color:var(--ink);margin-top:5px}
+.insight-card .ia{font-size:12px;color:var(--teal-700);margin-top:7px;font-weight:600}
+.sync-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 10px;border-radius:20px;font-weight:600}
+.sync-badge.on{background:var(--good-bg);color:var(--good)}
+.sync-badge.off{background:#EFEEE7;color:var(--muted)}
+.summary-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
 
-<!-- ============ LOGIN ============ -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo">🏪</div>
-    <h1 id="login-shopname">Todtingtermalatod</h1>
-    <p class="sub">ระบบจัดการร้านค้า</p>
-    <div id="login-connecting" style="text-align:center;padding:14px 0;color:var(--muted);font-size:13.5px">
-      🔄 กำลังเชื่อมต่อฐานข้อมูลออนไลน์...
+    <div class="login-logo">💸</div>
+    <h1>Debt Freedom</h1>
+    <p class="sub">ระบบช่วยวางแผนปลดหนี้ส่วนบุคคล</p>
+    <div id="setup-view">
+      <label>ชื่อของคุณ</label>
+      <input type="text" id="setup-name" placeholder="เช่น คุณสมชาย">
+      <label>ตั้งรหัส PIN 4 หลัก (ไม่บังคับ — เว้นว่างได้ถ้าไม่ต้องการล็อก)</label>
+      <input type="password" id="setup-pin" maxlength="4" inputmode="numeric" placeholder="เช่น 1234">
+      <div class="field-err" id="setup-err" style="display:none"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doSetup()">เริ่มต้นใช้งาน</button>
     </div>
-    <div id="login-connect-err" class="field-err" style="display:none;text-align:center;margin-bottom:10px"></div>
-    <div id="login-form-fields" style="display:none">
-      <label>Username</label>
-      <input type="text" id="login-user" placeholder="กรอก Username">
-      <label>Password</label>
-      <input type="password" id="login-pass" placeholder="กรอก Password">
-      <div class="field-err" id="login-err" style="display:none"></div>
-      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doLogin()">เข้าสู่ระบบ</button>
-      <p class="hint" style="text-align:center;margin-top:16px">
-        <a href="javascript:void(0)" onclick="openClearCacheModal()" style="color:var(--muted)">ล้างแคช / เริ่มต้นระบบใหม่</a>
-      </p>
+    <div id="unlock-view" style="display:none">
+      <p class="hint" style="text-align:center" id="unlock-name"></p>
+      <label>กรอกรหัส PIN</label>
+      <input type="password" id="unlock-pin" maxlength="4" inputmode="numeric" placeholder="••••">
+      <div class="field-err" id="unlock-err" style="display:none"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="doUnlock()">เข้าสู่ระบบ</button>
+      <p class="hint" style="text-align:center;margin-top:16px"><a href="javascript:void(0)" onclick="openResetModal()" style="color:var(--muted)">ลืม PIN? ล้างข้อมูล/เริ่มต้นใหม่</a></p>
     </div>
   </div>
 </div>
 
-<!-- ============ APP ============ -->
 <div id="app">
-  <div class="sidebar-brand" id="sidebar-brand">🏪 <span id="sb-shopname">Todtingtermalatod</span></div>
-  <div class="topbar">
-    <div class="shopname" id="tb-shopname">🏪 Todtingtermalatod</div>
-    <div class="row" style="align-items:center">
-      <div class="user-chip" id="tb-user"></div>
-      <button class="icon-btn" onclick="doLogout()" title="ออกจากระบบ">⏻</button>
+  <div class="main-col">
+    <div class="topbar">
+      <div class="brand">💸 Debt Freedom</div>
+      <div class="row" style="align-items:center">
+        <div class="user-chip" id="tb-user"></div>
+        <button class="icon-btn" onclick="doLock()" title="ล็อกระบบ">🔒</button>
+      </div>
     </div>
-  </div>
-  <div class="alert-strip" id="alert-strip"></div>
-  <div id="main"></div>
-  <div class="cart-fab" id="cart-fab" onclick="go('checkout')">
-    <span id="cart-fab-text">ตะกร้า</span>
-    <span class="btn btn-amber btn-sm" style="pointer-events:none">ชำระเงิน →</span>
+    <div class="alert-strip" id="alert-strip"></div>
+    <div id="main"></div>
   </div>
   <div class="bottomnav" id="bottomnav"></div>
 </div>
@@ -289,395 +224,467 @@ input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input
 
 <script>
 /* =========================================================================
-   Todtingtermalatod POS — single-file web app
-   Data persistence: window.localStorage (key "posData")
+   Debt Freedom System — Phase 1 MVP, single-file, localStorage
    ========================================================================= */
-
 const MENUS = [
-  {key:'dashboard', label:'ภาพรวม', em:'📊'},
-  {key:'sell',      label:'ขายสินค้า', em:'🛒'},
-  {key:'products',  label:'สินค้า', em:'📦'},
-  {key:'materials', label:'วัตถุดิบ', em:'🧺'},
-  {key:'history',   label:'ประวัติขาย', em:'🧾'},
-  {key:'profit',    label:'กำไร-ขาดทุน', em:'📈'},
-  {key:'payments',  label:'ช่องทางชำระ', em:'💳'},
-  {key:'shop',      label:'ข้อมูลร้าน', em:'🏬'},
-  {key:'users',     label:'ผู้ใช้งาน', em:'👤'},
+  {key:'dashboard', label:'ภาพรวม',      em:'📊'},
+  {key:'debts',     label:'หนี้ของฉัน',   em:'💳'},
+  {key:'finance',   label:'การเงิน',      em:'💰'},
+  {key:'plan',      label:'แผนปลดหนี้',   em:'🎯'},
+  {key:'settings',  label:'ตั้งค่า',       em:'⚙️'},
 ];
+const DEBT_TYPES = ['บัตรเครดิต','สินเชื่อส่วนบุคคล','สินเชื่อรถยนต์','สินเชื่อบ้าน','กยศ.','อื่นๆ'];
+const EXPENSE_LEVELS = [{key:'essential',label:'จำเป็น',color:'ok'},{key:'reducible',label:'ลดได้',color:'warn'},{key:'cuttable',label:'ตัดได้',color:'danger'}];
+const TX_INCOME_CATS = ['เงินเดือน','รายได้เสริม','โบนัส','ของขวัญ/ได้รับ','อื่นๆ'];
+const TX_EXPENSE_CATS = ['ที่อยู่อาศัย','อาหาร','เดินทาง/น้ำมัน','สาธารณูปโภค','ผ่อนชำระ/หนี้','ช้อปปิ้ง','บันเทิง','สุขภาพ','การศึกษา','ออม/ลงทุน','อื่นๆ'];
 
 let DB = null;
-let SESSION = null; // {userId, username, role}
-let CART = {}; // productId -> qty
-let CURRENT_ORDER = null; // pending order at checkout
-let currentEditImg = {}; // temp holder for image data urls in open form
+let SESSION_UNLOCKED = false;
 let CURRENT_PAGE = 'dashboard';
-let DB_READY = false;
+let currentEditImg = {};
+
+/* ---------------- persistence ---------------- */
+function defaultDB(){
+  return {
+    profile: {name:'', pin:''},
+    incomes: [],
+    expenses: [],
+    debts: [],
+    payments: [],
+    transactions: [], /* dated income/expense entries: {id,type,name,category,level,amount,date,note} */
+    savingsCurrent: 0,
+    monthlySavingsGoal: 0,
+    strategy: 'avalanche',
+    customOrder: [],
+    extraPayment: 0,
+  };
+}
+function loadDB(){
+  try{
+    const raw = localStorage.getItem('debtFreedomData');
+    DB = raw ? JSON.parse(raw) : null;
+  }catch(e){ DB = null; }
+  if(DB){
+    /* migration: fill in fields added after initial release so old saves keep working */
+    if(!Array.isArray(DB.transactions)) DB.transactions = [];
+    delete DB.firebase; /* Firebase config now lives in code, not in saved data */
+  }
+}
+function saveDB(skipSync){ try{ localStorage.setItem('debtFreedomData', JSON.stringify(DB)); }catch(e){} if(!skipSync) queueFirebaseSync(); }
+function uid(){ return 'id_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 
 /* =========================================================================
-   FIREBASE CONFIG
+   FIREBASE SYNC — config lives here in the code, not in the UI.
    ---------------------------------------------------------------------
-   1) Go to https://console.firebase.google.com → Add project (free)
-   2) In the project, click the "</>" (Web) icon to register a web app,
-      and copy the firebaseConfig object it gives you into FIREBASE_CONFIG below.
-   3) In the left menu: Build → Firestore Database → Create database
-      (start in "test mode" is fine to begin with).
-   4) In the left menu: Build → Authentication → Sign-in method → enable
-      "Anonymous". This app signs everyone in anonymously in the background
-      so Firestore Security Rules can require request.auth != null instead
-      of being wide open to the entire internet.
-   5) In Firestore → Rules, paste:
+   1) Create a free project at https://console.firebase.google.com
+   2) Build → Firestore Database → Create database → start in test mode
+   3) Project settings → Your apps → "</>" (web) → register an app → copy
+      the firebaseConfig values into FIREBASE_CONFIG below.
+   4) Change FIREBASE_SYNC_CODE to something long and hard to guess — it
+      acts as the "password" for this data since no Firebase Auth is used.
+      Use the SAME sync code on every device you want to share data with.
+   5) Firestore → Rules → for this simple no-auth setup you need:
         rules_version = '2';
         service cloud.firestore {
           match /databases/{database}/documents {
-            match /pos/{docId} {
-              allow read, write: if request.auth != null;
-            }
+            match /debtFreedomUsers/{docId} { allow read, write: if true; }
           }
         }
-      then click "Publish".
-   See README.md for the full step-by-step walkthrough.
+      (Anyone who has your FIREBASE_CONFIG *and* FIREBASE_SYNC_CODE could
+      read/write this document — keep the sync code private, like a password.)
+   Leave FIREBASE_CONFIG.apiKey as "YOUR_API_KEY" to keep the app fully
+   offline/local-only (localStorage), no code changes needed elsewhere.
    ========================================================================= */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBUBFO7anEtbxLI0QxKkD2HzorzMRRTTs8",
-  authDomain: "todtingtermalatod.firebaseapp.com",
-  projectId: "todtingtermalatod",
-  storageBucket: "todtingtermalatod.firebasestorage.app",
-  messagingSenderId: "1060893171294",
-  appId: "1:1060893171294:web:2592d9cbf6ec2e3a90decf"
+  apiKey: "AIzaSyB42OMFrvfKZTQKMNM_N4HFkKP-WVU6lMU",
+  authDomain: "deadmoney-31470.firebaseapp.com",
+  projectId: "deadmoney-31470",
+  storageBucket: "deadmoney-31470.firebasestorage.app",
+  messagingSenderId: "674448296278",
+  appId: "1:674448296278:web:6684ae0c714b79722a2ef7"
 };
-let fdb = null; // Firestore instance (null until configured + connected)
-const POS_DOC_PATH = ['pos','data']; // single shared document holding the whole shop's data
+const FIREBASE_SYNC_CODE = "7p5BnUqTGCFl5PqRdfGmH18R";
 
-/* ---------------- persistence ---------------- */
-function defaultRoles(){
-  const all = MENUS.map(m=>m.key);
-  return [
-    {id:'role_superadmin', name:'Superadmin', permissions: all, isSystem:true,
-      createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()},
-    {id:'role_admin', name:'Admin', permissions: all, isSystem:false,
-      createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()},
-    {id:'role_manager', name:'ผู้จัดการ', permissions: all.filter(k=>k!=='users'), isSystem:false,
-      createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()},
-    {id:'role_staff', name:'พนักงานทั่วไป', permissions: ['sell','history'], isSystem:false,
-      createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()}
-  ];
+const FB = {app:null, db:null, ready:false};
+let FB_UNSUB = null; // unsubscribe function for the active realtime listener
+function fbConfigured(){
+  return !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey!=='YOUR_API_KEY'
+    && FIREBASE_SYNC_CODE && FIREBASE_SYNC_CODE!=='CHANGE_ME_TO_SOMETHING_LONG_AND_PRIVATE');
 }
-function defaultDB(){
-  return {
-    shop:{name:'Todtingtermalatod', desc:'', address:'', phone:'', image:''},
-    users:[{
-      id:'u_admin', username:'Superadmin', password:'Superadmin', name:'Super Admin',
-      phone:'', image:'', role:'Superadmin', permissions: MENUS.map(m=>m.key),
-      active:true, createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()
-    }],
-    roles: defaultRoles(),
-    materials:[],
-    products:[],
-    paymentMethods:[
-      {id:'pm_cash', name:'เงินสด', desc:'ชำระด้วยเงินสด', icon:'', qrImage:'', cash:true, createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()}
-    ],
-    orders:[],
-    activityLog:[],
-    settings:{lineToken:''},
-    seq:{product:0, material:0, order:0}
-  };
-}
-/* Fills in any fields missing from data written by older versions of this
-   app (works the same whether DB just arrived from Firestore or was freshly
-   created) — keeps this idempotent so it's safe to call on every snapshot. */
-function ensureDBDefaults(){
-  if(!DB.settings) DB.settings = {lineToken:''};
-  if(!DB.seq) DB.seq = {product:0, material:0, order:0};
-  if(!DB.orders) DB.orders = [];
-  if(!DB.activityLog) DB.activityLog = [];
-  if(!DB.materials) DB.materials = [];
-  if(!DB.products) DB.products = [];
-  if(!DB.paymentMethods) DB.paymentMethods = [];
-  if(!DB.users) DB.users = [];
-  DB.orders.forEach(o=>{ if(!o.status) o.status = 'completed'; });
-  if(!DB.roles || !DB.roles.length){
-    DB.roles = defaultRoles();
-    const usedNames = new Set(DB.users.map(u=>u.role));
-    usedNames.forEach(n=>{
-      if(n && !DB.roles.find(r=>r.name===n)){
-        DB.roles.push({id:uid(), name:n, permissions: MENUS.map(m=>m.key), isSystem:false,
-          createdBy:'system', createdAt:Date.now(), updatedBy:'system', updatedAt:Date.now()});
-      }
-    });
-  }
-}
-function isFirebaseConfigured(){
-  return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
-}
-/* Saves the whole shared DB object back to Firestore (or localStorage as a
-   fallback if no Firebase config has been filled in yet, so the app still
-   works standalone while you're setting things up). Fire-and-forget: the UI
-   already re-renders from the in-memory DB immediately, this just persists
-   it for other devices / next load. */
-async function saveDB(){
-  if(!isFirebaseConfigured() || !fdb){
-    try{ localStorage.setItem('posData', JSON.stringify(DB)); }catch(e){}
-    return;
-  }
+function initFirebase(){
+  if(!fbConfigured()) { FB.ready=false; return false; }
   try{
-    await fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]).set(DB);
-  }catch(e){
-    console.error('Firestore save error', e);
-    toast('บันทึกข้อมูลขึ้นระบบออนไลน์ไม่สำเร็จ (ตรวจสอบอินเทอร์เน็ต)');
-  }
+    if(!FB.app){
+      FB.app = firebase.initializeApp(FIREBASE_CONFIG);
+      FB.db = firebase.firestore();
+    }
+    FB.ready = true;
+    return true;
+  }catch(e){ console.error('Firebase init failed', e); FB.ready=false; return false; }
 }
-/* Boots the app: connects to Firestore (with anonymous auth) and keeps DB in
-   sync in real time across every device that has this page open. Falls back
-   to plain localStorage (single device only) if Firebase isn't configured. */
-function bootData(onReady){
-  if(!isFirebaseConfigured()){
-    try{
-      const raw = localStorage.getItem('posData');
-      DB = raw ? JSON.parse(raw) : defaultDB();
-    }catch(e){ DB = defaultDB(); }
-    ensureDBDefaults();
-    DB_READY = true;
-    onReady();
-    return;
-  }
-  try{
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
-    fdb = firebase.firestore();
-    firebase.auth().signInAnonymously().catch(err=>{
-      console.error('Firebase anonymous auth error', err);
-      showLoginConnectError('เชื่อมต่อระบบยืนยันตัวตนไม่สำเร็จ ตรวจสอบว่าเปิดใช้งาน Anonymous sign-in ใน Firebase Authentication แล้ว');
-    });
-    firebase.auth().onAuthStateChanged(user=>{
-      if(!user) return;
-      const docRef = fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]);
-      docRef.onSnapshot(async snap=>{
-        if(snap.exists){
-          DB = snap.data();
-        } else {
-          DB = defaultDB();
-          try{ await docRef.set(DB); }catch(e){ console.error(e); }
-        }
-        ensureDBDefaults();
-        const firstLoad = !DB_READY;
-        DB_READY = true;
-        onReady(firstLoad);
-      }, err=>{
-        console.error('Firestore snapshot error', err);
-        showLoginConnectError('เชื่อมต่อฐานข้อมูลออนไลน์ไม่สำเร็จ ตรวจสอบ Firestore Rules และการตั้งค่า Firebase config');
-      });
-    });
-  }catch(e){
-    console.error('Firebase init error', e);
-    showLoginConnectError('ตั้งค่า Firebase ไม่ถูกต้อง กรุณาตรวจสอบ FIREBASE_CONFIG ในไฟล์โค้ด');
-  }
+function fbDocRef(){ return FB.db.collection('debtFreedomUsers').doc(FIREBASE_SYNC_CODE.trim()); }
+function queueFirebaseSync(){
+  if(!fbConfigured()) return;
+  clearTimeout(window._fbSyncT);
+  window._fbSyncT = setTimeout(pushToFirebase, 900);
 }
-function showLoginConnectError(msg){
-  const el = document.getElementById('login-connect-err');
-  if(el){ el.textContent = msg; el.style.display='block'; }
-  const c = document.getElementById('login-connecting');
-  if(c) c.style.display='none';
+function pushToFirebase(){
+  if(!initFirebase()) return;
+  setSyncStatus('syncing');
+  fbDocRef().set({data: JSON.stringify(DB), updatedAt: Date.now()})
+    .then(()=> setSyncStatus('on'))
+    .catch(e=>{ console.error(e); setSyncStatus('error'); });
 }
-
-function nextCode(prefix, seqKey){
-  DB.seq[seqKey] = (DB.seq[seqKey]||0) + 1;
-  return prefix + String(DB.seq[seqKey]).padStart(4,'0');
+/* Keeps every device using the same FIREBASE_SYNC_CODE in sync automatically
+   — no need to press a manual refresh button. Falls back gracefully (stays
+   local-only) if Firebase isn't configured in the code or the connection fails. */
+function startRealtimeSync(){
+  if(!initFirebase()) return;
+  if(FB_UNSUB) { FB_UNSUB(); FB_UNSUB = null; }
+  setSyncStatus('syncing');
+  FB_UNSUB = fbDocRef().onSnapshot(doc=>{
+    if(doc.exists && doc.data().data){
+      const remote = JSON.parse(doc.data().data);
+      DB = remote;
+      if(!Array.isArray(DB.transactions)) DB.transactions = [];
+      saveDB(true);
+      setSyncStatus('on');
+      if(SESSION_UNLOCKED && CURRENT_PAGE) ({dashboard:renderDashboard, debts:renderDebts, finance:renderFinance, plan:renderPlan, settings:renderSettings})[CURRENT_PAGE]();
+    } else {
+      setSyncStatus('on');
+    }
+  }, err=>{ console.error('Firestore realtime sync error', err); setSyncStatus('error'); });
 }
-function uid(){ return 'id_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
-
-function logActivity(action, detail){
-  DB.activityLog.unshift({
-    time: Date.now(), user: SESSION ? SESSION.username : 'system',
-    action, detail
-  });
-  if(DB.activityLog.length>2000) DB.activityLog.length = 2000;
-  saveDB();
+function pullFromFirebase(showToast){
+  if(!initFirebase()){ if(showToast) toast('ยังไม่ได้ตั้งค่า Firebase ในโค้ด (ดูคอมเมนต์ FIREBASE_CONFIG ในไฟล์)'); return; }
+  setSyncStatus('syncing');
+  fbDocRef().get().then(doc=>{
+    if(doc.exists && doc.data().data){
+      const remote = JSON.parse(doc.data().data);
+      DB = remote;
+      if(!Array.isArray(DB.transactions)) DB.transactions = [];
+      saveDB(true);
+      setSyncStatus('on');
+      if(showToast) toast('ดึงข้อมูลล่าสุดจาก Firebase แล้ว');
+      if(CURRENT_PAGE) ({dashboard:renderDashboard, debts:renderDebts, finance:renderFinance, plan:renderPlan, settings:renderSettings})[CURRENT_PAGE]();
+    } else {
+      setSyncStatus('on');
+      if(showToast) toast('ยังไม่มีข้อมูลบน Firebase สำหรับรหัสนี้ — จะสร้างให้เมื่อบันทึกครั้งถัดไป');
+    }
+  }).catch(e=>{ console.error(e); setSyncStatus('error'); if(showToast) toast('เชื่อมต่อ Firebase ไม่สำเร็จ ตรวจสอบค่า config'); });
+}
+function setSyncStatus(s){
+  window._syncStatus = s;
+  const el = document.getElementById('sync-badge');
+  if(!el) return;
+  const map = {on:['✅ ซิงค์แล้ว','on'], syncing:['🔄 กำลังซิงค์...','off'], off:['⚪ ไม่ได้เชื่อมต่อ Firebase','off'], error:['⚠️ ซิงค์ล้มเหลว','off']};
+  const [label,cls] = map[s]||map.off;
+  el.textContent = label; el.className = 'sync-badge '+cls;
 }
 
 /* ---------------- helpers ---------------- */
-function money(n){ return Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmtDate(ts){ const d=new Date(ts); return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}); }
-function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }
-function fmtDateTime(ts){ return fmtDate(ts)+' '+fmtTime(ts); }
+function money(n){ return Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function esc(s){ return (s===undefined||s===null)?'':String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function calcProductCost(product){
-  return (product.materials||[]).reduce((sum,mu)=>{
-    const mat = DB.materials.find(m=>m.id===mu.materialId);
-    return sum + (mat ? Number(mat.costPerUnit||0)*Number(mu.qty||0) : 0);
-  },0);
-}
-/* Orders with status 'cancelled' are excluded from revenue, dashboard and
-   profit/loss figures, but remain visible in history for audit purposes. */
-function activeOrders(){ return DB.orders.filter(o=>o.status!=='cancelled'); }
+function fmtDate(iso){ if(!iso) return '-'; const d=new Date(iso); return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(window._toastT); window._toastT=setTimeout(()=>t.classList.remove('show'),2200);
 }
-function openModal(html){
-  document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('modal-bg').classList.add('show');
-}
-function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); currentEditImg={}; }
+function openModal(html){ document.getElementById('modal-body').innerHTML = html; document.getElementById('modal-bg').classList.add('show'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
 document.getElementById('modal-bg').addEventListener('click', e=>{ if(e.target.id==='modal-bg') closeModal(); });
-
-function readImage(input, cb){
-  const f = input.files[0]; if(!f) return;
-  const reader = new FileReader();
-  reader.onload = ()=> cb(reader.result);
-  reader.readAsDataURL(f);
-}
-/* Resizes/compresses an uploaded image before it's stored. Important once
-   data lives in Firestore: each document has a 1MiB limit, and this whole
-   shop's data shares one document, so keeping images small (~640px, JPEG)
-   matters a lot more than it did with plain localStorage. */
-function compressImageFile(file, maxDim, quality){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      const img = new Image();
-      img.onload = ()=>{
-        let w = img.width, h = img.height;
-        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
-        else if(h >= w && h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = ()=> reject(new Error('อ่านไฟล์ภาพไม่สำเร็จ'));
-      img.src = reader.result;
-    };
-    reader.onerror = ()=> reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
-    reader.readAsDataURL(file);
-  });
-}
-/* Reusable image upload box: avoids fragile inline-string HTML tricks so the
-   preview always renders correctly right after a file is chosen. */
-function uploadBoxHTML(boxId, key, currentValue, placeholder){
-  return `<div class="upload-box" id="${boxId}">
-      <input type="file" accept="image/*" onchange="handleImageUpload(this,'${key}','${boxId}',${JSON.stringify(placeholder)})">
-      ${currentValue ? `<img src="${currentValue}">` : esc(placeholder)}
-    </div>`;
-}
-function handleImageUpload(input, key, boxId, placeholder){
-  const f = input.files[0]; if(!f) return;
-  compressImageFile(f, 640, 0.72).then(dataUrl=>{
-    currentEditImg[key] = dataUrl;
-    document.getElementById(boxId).outerHTML = uploadBoxHTML(boxId, key, dataUrl, placeholder);
-  }).catch(()=>{ toast('ไม่สามารถประมวลผลรูปภาพนี้ได้ ลองใช้รูปอื่น'); });
+function monthLabel(n){
+  const y = Math.floor(n/12), m = n%12;
+  const parts = [];
+  if(y>0) parts.push(y+' ปี');
+  if(m>0 || y===0) parts.push(m+' เดือน');
+  return parts.join(' ');
 }
 
-function hasPerm(key){
-  if(!SESSION) return false;
-  if(SESSION.role==='Superadmin') return true;
-  return (SESSION.permissions||[]).includes(key);
-}
-
-/* ---------------- clear cache / full reset ---------------- */
-const CLEAR_CACHE_PHRASE = 'ล้างข้อมูล';
-function openClearCacheModal(){
-  const onlineNote = isFirebaseConfigured()
-    ? `<div class="hint" style="color:var(--danger)">⚠️ ระบบเชื่อมต่อฐานข้อมูลออนไลน์ (Firebase) อยู่ — การล้างแคชนี้จะลบข้อมูล<b>ของร้านทั้งหมดบนออนไลน์</b> ซึ่งกระทบทุกเครื่อง/ทุกคนที่ใช้ระบบนี้ร่วมกัน ไม่ใช่แค่เครื่องนี้เครื่องเดียว</div>`
-    : `<div class="hint">ระบบนี้ยังไม่ได้เชื่อมต่อฐานข้อมูลออนไลน์ (Firebase) — ข้อมูลที่จะถูกลบเป็นของเบราว์เซอร์เครื่องนี้เท่านั้น</div>`;
-  openModal(`
-    <div class="modal-head"><h3>ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <div class="check-alert show">คำเตือน: การล้างแคชจะลบข้อมูลทั้งหมดอย่างถาวร ได้แก่ สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน และการตั้งค่าทั้งหมด ไม่สามารถกู้คืนได้ และระบบจะกลับไปเป็นค่าเริ่มต้น (บัญชี Superadmin ใหม่)</div>
-    ${onlineNote}
-    <div class="hint">แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน" หากยังไม่ได้ทำ</div>
-    <label>พิมพ์ "<b>${CLEAR_CACHE_PHRASE}</b>" เพื่อยืนยันการล้างแคช</label>
-    <input type="text" id="cc-confirm-text" placeholder="${CLEAR_CACHE_PHRASE}">
-    <div class="field-err" id="cc-confirm-err" style="display:none">ข้อความไม่ตรงกัน กรุณาพิมพ์ "${CLEAR_CACHE_PHRASE}" ให้ถูกต้อง</div>
-    <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="doClearCache()">ยืนยันล้างแคชทั้งหมด</button>
-  `);
-}
-async function doClearCache(){
-  const val = document.getElementById('cc-confirm-text').value.trim();
-  if(val !== CLEAR_CACHE_PHRASE){ document.getElementById('cc-confirm-err').style.display='block'; return; }
-  try{ localStorage.removeItem('posData'); }catch(e){}
-  try{ sessionStorage.removeItem('posSession'); }catch(e){}
-  if(isFirebaseConfigured() && fdb){
-    try{ await fdb.collection(POS_DOC_PATH[0]).doc(POS_DOC_PATH[1]).set(defaultDB()); }
-    catch(e){ console.error(e); toast('ล้างข้อมูลออนไลน์ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต'); return; }
-  }
-  location.reload();
-}
-
-/* ---------------- auth ---------------- */
-function doLogin(){
-  const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value;
-  const err = document.getElementById('login-err');
-  const user = DB.users.find(x=>x.username===u && x.password===p);
-  if(!user){ err.style.display='block'; err.textContent='Username หรือ Password ไม่ถูกต้อง'; return; }
-  if(!user.active){ err.style.display='block'; err.textContent='บัญชีนี้ถูกปิดใช้งาน'; return; }
+/* ---------------- setup / login ---------------- */
+function doSetup(){
+  const name = document.getElementById('setup-name').value.trim();
+  const pin = document.getElementById('setup-pin').value.trim();
+  const err = document.getElementById('setup-err');
+  if(!name){ err.style.display='block'; err.textContent='กรุณากรอกชื่อของคุณ'; return; }
+  if(pin && !/^\d{4}$/.test(pin)){ err.style.display='block'; err.textContent='PIN ต้องเป็นตัวเลข 4 หลัก หรือเว้นว่างไว้'; return; }
   err.style.display='none';
-  SESSION = {userId:user.id, username:user.username, name:user.name, role:user.role, permissions:user.permissions||[]};
-  sessionStorage.setItem('posSession', JSON.stringify(SESSION));
-  logActivity('เข้าสู่ระบบ', `${user.username} เข้าสู่ระบบ`);
+  DB = defaultDB();
+  DB.profile.name = name; DB.profile.pin = pin;
+  saveDB();
+  SESSION_UNLOCKED = true;
   enterApp();
 }
-function doLogout(){
-  logActivity('ออกจากระบบ', `${SESSION.username} ออกจากระบบ`);
-  SESSION = null; sessionStorage.removeItem('posSession');
+function doUnlock(){
+  const pin = document.getElementById('unlock-pin').value.trim();
+  const err = document.getElementById('unlock-err');
+  if(pin !== DB.profile.pin){ err.style.display='block'; err.textContent='PIN ไม่ถูกต้อง'; return; }
+  err.style.display='none';
+  SESSION_UNLOCKED = true;
+  enterApp();
+}
+function doLock(){
+  SESSION_UNLOCKED = false;
   document.getElementById('app').classList.remove('show');
+  showLoginScreen();
+}
+function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
-  document.getElementById('login-user').value=''; document.getElementById('login-pass').value='';
+  if(DB && DB.profile && DB.profile.name){
+    document.getElementById('setup-view').style.display='none';
+    document.getElementById('unlock-view').style.display='block';
+    document.getElementById('unlock-name').textContent = `สวัสดี ${DB.profile.name} 👋`;
+    document.getElementById('unlock-pin').value='';
+    if(!DB.profile.pin){ SESSION_UNLOCKED = true; enterApp(); }
+  } else {
+    document.getElementById('setup-view').style.display='block';
+    document.getElementById('unlock-view').style.display='none';
+  }
 }
 function enterApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
-  document.getElementById('tb-shopname').textContent = '🏪 ' + (DB.shop.name || 'ร้านค้า');
-  document.getElementById('sb-shopname').textContent = DB.shop.name || 'ร้านค้า';
-  document.getElementById('tb-user').textContent = SESSION.name + ' · ' + SESSION.role;
+  document.getElementById('tb-user').textContent = DB.profile.name;
   renderNav();
-  const first = MENUS.find(m=>hasPerm(m.key));
-  go(first ? first.key : 'dashboard');
+  go('dashboard');
+  if(fbConfigured()) startRealtimeSync();
+}
+function openResetModal(){
+  openModal(`
+    <div class="modal-head"><h3>ล้างข้อมูลทั้งหมด</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <div class="check-alert show">คำเตือน: จะลบข้อมูลรายรับ-รายจ่าย หนี้ทุกก้อน และประวัติการชำระทั้งหมดอย่างถาวร ไม่สามารถกู้คืนได้</div>
+    <label>พิมพ์ "ล้างข้อมูล" เพื่อยืนยัน</label>
+    <input type="text" id="reset-confirm">
+    <div class="field-err" id="reset-err" style="display:none">ข้อความไม่ตรงกัน</div>
+    <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="doReset()">ยืนยันล้างข้อมูล</button>
+  `);
+}
+function doReset(){
+  if(document.getElementById('reset-confirm').value.trim() !== 'ล้างข้อมูล'){ document.getElementById('reset-err').style.display='block'; return; }
+  localStorage.removeItem('debtFreedomData');
+  location.reload();
 }
 
 /* ---------------- nav / routing ---------------- */
 function renderNav(){
-  const nav = document.getElementById('bottomnav');
-  nav.innerHTML = MENUS.filter(m=>hasPerm(m.key)).map(m=>
-    `<button class="nav-btn" id="nav-${m.key}" onclick="go('${m.key}')"><span class="em">${m.em}</span>${m.label}</button>`
-  ).join('');
+  const html = MENUS.map(m=>`<button class="nav-btn" id="nav-${m.key}" onclick="go('${m.key}')"><span class="em">${m.em}</span>${m.label}</button>`).join('');
+  document.getElementById('bottomnav').innerHTML = html;
 }
 function go(page){
   CURRENT_PAGE = page;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const nb = document.getElementById('nav-'+page); if(nb) nb.classList.toggle('active', true);
+  const nb = document.getElementById('nav-'+page); if(nb) nb.classList.add('active');
   renderAlertStrip();
-  const renderers = {
-    dashboard: renderDashboard, sell: renderSell, products: renderProducts,
-    materials: renderMaterials, history: renderHistory, profit: renderProfit, payments: renderPayments,
-    shop: renderShop, users: renderUsers, checkout: renderCheckout
-  };
-  document.getElementById('cart-fab').classList.toggle('show', page==='sell' && cartCount()>0);
-  (renderers[page]||renderDashboard)();
+  ({dashboard:renderDashboard, debts:renderDebts, finance:renderFinance, plan:renderPlan, settings:renderSettings})[page]();
   document.getElementById('main').scrollTop = 0;
-}
-function isModalOpen(){ return document.getElementById('modal-bg').classList.contains('show'); }
-/* Called whenever fresh data arrives from Firestore (from another device, or
-   our own write). Only re-paints the current page — never touches an open
-   modal — so someone mid-edit on this device isn't interrupted. */
-function refreshCurrentView(){
-  if(!SESSION) return;
-  document.getElementById('tb-shopname').textContent = '🏪 ' + (DB.shop.name || 'ร้านค้า');
-  document.getElementById('sb-shopname').textContent = DB.shop.name || 'ร้านค้า';
-  if(isModalOpen()) { renderAlertStrip(); return; }
-  go(CURRENT_PAGE);
 }
 function renderAlertStrip(){
   const strip = document.getElementById('alert-strip');
+  const f = computeFinance();
   const msgs = [];
-  const low = DB.materials.filter(m=>Number(m.qty) <= Number(m.minQty||0));
-  if(low.length) msgs.push(`⚠️ วัตถุดิบใกล้หมด ${low.length} รายการ`);
-  const soon = DB.materials.filter(m=>{
-    if(!m.expiryDate) return false;
-    const days = (new Date(m.expiryDate) - new Date())/86400000;
-    return days <= 1 && days >= -365;
+  if(f.availableForDebt < f.totalMinPayment) msgs.push('⚠️ เงินคงเหลือหลังหักค่าใช้จ่ายไม่พอชำระค่างวดขั้นต่ำรวมของหนี้ทั้งหมด');
+  if(msgs.length){ strip.textContent = msgs.join(' · '); strip.classList.add('show'); } else strip.classList.remove('show');
+}
+
+/* =========================================================================
+   FINANCE CALCULATIONS
+   ========================================================================= */
+function totalIncome(){ return DB.incomes.reduce((s,i)=>s + monthlyAmount(i),0); }
+function monthlyAmount(item){
+  const f = item.frequency||'monthly';
+  const mult = f==='weekly'?4.33 : f==='yearly'?(1/12) : f==='daily'?30: 1;
+  // conservative average for irregular income: apply 80% factor
+  const base = Number(item.amount||0)*mult;
+  return item.type==='irregular' ? base*0.8 : base;
+}
+function totalExpenseByLevel(level){ return DB.expenses.filter(e=>e.level===level).reduce((s,e)=>s+monthlyAmount(e),0); }
+function activeDebts(){ return DB.debts.filter(d=>d.status!=='closed'); }
+function totalMinPayment(){ return activeDebts().reduce((s,d)=>s+Number(d.minPayment||0),0); }
+function computeFinance(){
+  const income = totalIncome();
+  const essential = totalExpenseByLevel('essential');
+  const reducible = totalExpenseByLevel('reducible');
+  const cuttable = totalExpenseByLevel('cuttable');
+  const savings = Number(DB.monthlySavingsGoal||0);
+  const availableForDebt = income - essential - reducible - cuttable - savings;
+  const totalMin = totalMinPayment();
+  const extraCapacity = Math.max(0, availableForDebt - totalMin);
+  return {income, essential, reducible, cuttable, savings, availableForDebt, totalMinPayment: totalMin, extraCapacity};
+}
+
+/* ---------------- Debt Engine ---------------- */
+function monthlyRate(debt){
+  const r = Number(debt.interestRate||0);
+  return debt.rateUnit==='month' ? r : r/12;
+}
+/* Simulates payoff month-by-month for a given strategy. Returns months to
+   freedom, total interest paid, and the month each debt gets closed. */
+function simulateDebtPayoff(debts, extraMonthly, strategy, customOrderIds){
+  const sim = debts.map(d=>({
+    id:d.id, name:d.name, outstanding:Number(d.principal), original:Number(d.principal),
+    rate: monthlyRate(d), minPayment:Number(d.minPayment||0), calcMethod:d.calcMethod||'reducing',
+    closed:false, closedMonth:null
+  })).filter(d=>d.outstanding>0);
+  if(!sim.length) return {months:0, totalInterest:0, perDebt:[], feasible:true};
+  let month=0, totalInterest=0;
+  const MAX_MONTHS = 600;
+  while(sim.some(d=>!d.closed) && month<MAX_MONTHS){
+    month++;
+    sim.forEach(d=>{
+      if(d.closed) return;
+      const interest = d.calcMethod==='flat' ? d.original*(d.rate/100) : d.outstanding*(d.rate/100);
+      d.outstanding += interest; totalInterest += interest;
+    });
+    let order;
+    const activeSim = sim.filter(d=>!d.closed);
+    if(strategy==='avalanche') order = [...activeSim].sort((a,b)=>b.rate-a.rate);
+    else if(strategy==='snowball') order = [...activeSim].sort((a,b)=>a.outstanding-b.outstanding);
+    else if(strategy==='custom' && customOrderIds && customOrderIds.length) order = customOrderIds.map(id=>activeSim.find(d=>d.id===id)).filter(Boolean);
+    else order = activeSim;
+    let budget = activeSim.reduce((s,d)=>s+Math.min(d.minPayment,d.outstanding),0) + Number(extraMonthly||0);
+    activeSim.forEach(d=>{ const pay=Math.min(d.minPayment,d.outstanding); d.outstanding-=pay; budget-=pay; });
+    for(const d of order){
+      if(d.closed || d.outstanding<=0 || budget<=0) continue;
+      const pay = Math.min(budget, d.outstanding);
+      d.outstanding -= pay; budget -= pay;
+    }
+    sim.forEach(d=>{ if(!d.closed && d.outstanding<=0.5){ d.closed=true; d.closedMonth=month; d.outstanding=0; } });
+  }
+  return {
+    months: month, totalInterest,
+    feasible: !sim.some(d=>!d.closed),
+    perDebt: sim.map(d=>({id:d.id, name:d.name, closedMonth:d.closedMonth}))
+  };
+}
+function currentPlanResult(){
+  const debts = activeDebts();
+  if(!debts.length) return null;
+  return simulateDebtPayoff(debts, DB.extraPayment, DB.strategy, DB.customOrder);
+}
+
+/* =========================================================================
+   SMART DEBT-FREEDOM INSIGHTS
+   ---------------------------------------------------------------------
+   Rules-based, calculated from the person's own numbers (not generic tips):
+   interest-trap detection, negotiate/consolidate opportunities, strategy
+   comparison, extra-payment sensitivity, cash-flow shortfall handling
+   (which debt is the least-bad one to ask for a payment pause on), and
+   quick-win detection. This is general educational information computed
+   from user-entered figures — not individualized financial or legal advice.
+   ========================================================================= */
+const UNSECURED_TYPES = ['บัตรเครดิต','สินเชื่อส่วนบุคคล','กยศ.','อื่นๆ'];
+const SECURED_TYPES = ['สินเชื่อรถยนต์','สินเชื่อบ้าน'];
+function annualRateOf(d){ return d.rateUnit==='month' ? Number(d.interestRate||0)*12 : Number(d.interestRate||0); }
+
+function computeDebtInsights(){
+  const insights = [];
+  const debts = activeDebts();
+  if(!debts.length) return insights;
+  const f = computeFinance();
+
+  /* 1) Interest-trap: minimum payment barely covers (or doesn't cover) the
+        interest that accrues each month, so the principal never really drops. */
+  debts.forEach(d=>{
+    const rate = monthlyRate(d);
+    const interest = d.calcMethod==='flat' ? Number(d.originalPrincipal||d.principal)*(rate/100) : Number(d.principal)*(rate/100);
+    if(d.minPayment>0 && d.minPayment <= interest*1.05){
+      const healthyPayment = Math.ceil((interest*1.15)/100)*100;
+      insights.push({type:'danger', icon:'🚨',
+        title:`"${d.name}" ติดกับดักดอกเบี้ย — จ่ายขั้นต่ำไปตลอดชีวิตก็ไม่มีวันหมด`,
+        detail:`ค่างวดขั้นต่ำ ฿${money(d.minPayment)}/เดือน แทบไม่ครอบคลุมดอกเบี้ยที่เกิดขึ้นจริงประมาณ ฿${money(Math.round(interest))}/เดือน เงินต้นจึงแทบไม่ลดลงเลย`,
+        action:`ควรจ่ายอย่างน้อย ฿${money(healthyPayment)}/เดือนสำหรับก้อนนี้ (มากกว่าดอกเบี้ยที่เกิดขึ้นจริง) มิฉะนั้นควรติดต่อเจ้าหนี้เพื่อเจรจาปรับโครงสร้างหนี้โดยเร็วที่สุด`});
+    }
   });
-  if(soon.length) msgs.push(`⏰ วัตถุดิบใกล้หมดอายุ ${soon.length} รายการ`);
-  if(msgs.length){ strip.textContent = msgs.join('   |   '); strip.classList.add('show'); }
-  else strip.classList.remove('show');
+
+  /* 2) High-interest unsecured debt → realistic consolidation/negotiation estimate */
+  debts.filter(d=>UNSECURED_TYPES.includes(d.type)).forEach(d=>{
+    const annual = annualRateOf(d);
+    if(annual >= 20){
+      const estNow = d.principal*(annual/100);
+      const estLow = d.principal*0.05;
+      const estSavings = Math.max(0, estNow-estLow);
+      insights.push({type:'opportunity', icon:'💡',
+        title:`"${d.name}" ดอกเบี้ย ${annual.toFixed(1)}%/ปี — มีทางลดได้จริง`,
+        detail:`ยอดคงเหลือ ฿${money(d.principal)} ที่ดอกเบี้ยระดับนี้คิดเป็นประมาณ ฿${money(Math.round(estNow))}/ปี หากเจรจาปรับโครงสร้างหนี้ให้เหลือประมาณ 5%/ปี (เช่น โครงการรวมหนี้ของธนาคารเจ้าหนี้ หรือ "คลินิกแก้หนี้ by SAM" สำหรับผู้ค้างชำระบัตรเครดิต/สินเชื่อส่วนบุคคลเกิน 120 วัน ยอดหนี้รวมไม่เกิน 2 ล้านบาท) อาจประหยัดดอกเบี้ยได้ประมาณ ฿${money(Math.round(estSavings))}/ปี`,
+        action:`ติดต่อธนาคารเจ้าหนี้เพื่อสอบถามโครงการรวมหนี้/ปรับโครงสร้างหนี้ หรือดูเงื่อนไขคลินิกแก้หนี้ที่ www.คลินิกแก้หนี้.com หรือโทร 1443`});
+    }
+  });
+
+  /* 3) Strategy comparison: is the currently-selected strategy leaving money on the table? */
+  const avalanche = simulateDebtPayoff(debts, DB.extraPayment, 'avalanche');
+  const snowball = simulateDebtPayoff(debts, DB.extraPayment, 'snowball');
+  const better = avalanche.totalInterest <= snowball.totalInterest ? 'avalanche' : 'snowball';
+  const betterResult = better==='avalanche' ? avalanche : snowball;
+  const currentResult = DB.strategy==='avalanche' ? avalanche : (DB.strategy==='snowball' ? snowball : null);
+  if(currentResult && better!==DB.strategy){
+    const otherResult = DB.strategy==='avalanche' ? snowball : avalanche;
+    const diff = Math.max(0, otherResult.totalInterest - betterResult.totalInterest);
+    if(diff > 300){
+      insights.push({type:'opportunity', icon:'🔁',
+        title:`เปลี่ยนกลยุทธ์เป็น ${better==='avalanche'?'Avalanche':'Snowball'} จะประหยัดดอกเบี้ยเพิ่ม`,
+        detail:`ด้วยเงินโปะปัจจุบัน (฿${money(DB.extraPayment)}/เดือน) แผน ${better==='avalanche'?'Avalanche':'Snowball'} ประหยัดดอกเบี้ยรวมประมาณ ฿${money(Math.round(diff))} เมื่อเทียบกับแผน ${DB.strategy==='avalanche'?'Avalanche':'Snowball'} ที่ใช้อยู่ตอนนี้ โดยค่างวดต่อเดือนเท่าเดิม`,
+        action:`ไปที่เมนู "แผนปลดหนี้" แล้วกดเปลี่ยนกลยุทธ์`});
+    }
+  }
+
+  /* 4) Extra-payment sensitivity: what +1,000 baht/month buys you */
+  if(currentResult && currentResult.feasible){
+    const boosted = simulateDebtPayoff(debts, Number(DB.extraPayment||0)+1000, DB.strategy, DB.customOrder);
+    const monthsSaved = currentResult.months - boosted.months;
+    const interestSaved = currentResult.totalInterest - boosted.totalInterest;
+    if(monthsSaved>0){
+      insights.push({type:'opportunity', icon:'📈',
+        title:`เพิ่มเงินโปะอีก ฿1,000/เดือน ช่วยได้มากกว่าที่คิด`,
+        detail:`หากเพิ่มเงินโปะจาก ฿${money(DB.extraPayment)} เป็น ฿${money(Number(DB.extraPayment||0)+1000)}/เดือน จะปลดหนี้เร็วขึ้น ${monthLabel(monthsSaved)} และประหยัดดอกเบี้ยประมาณ ฿${money(Math.round(interestSaved))}`,
+        action:`ลองปรับ Slider เงินโปะที่เมนู "แผนปลดหนี้" ดู`});
+    }
+  }
+
+  /* 5) Cash-flow shortfall → concrete triage plan, including which debt is the
+        least-costly one to consider a payment pause on (secured debt like a
+        house/car risks repossession, so keep those current; among unsecured
+        debts, pausing the LOWEST-rate one grows the slowest while you catch up). */
+  const deficit = f.totalMinPayment - f.availableForDebt;
+  if(deficit > 0){
+    let detail;
+    if(f.cuttable >= deficit){
+      detail = `หากตัดค่าใช้จ่ายประเภท "ตัดได้" ทั้งหมด (฿${money(Math.round(f.cuttable))}) จะปิดช่องว่างนี้ได้ทันทีโดยไม่ต้องแตะหนี้ก้อนไหนเลย`;
+    } else {
+      const stillShort = deficit - f.cuttable;
+      const unsecured = debts.filter(d=>UNSECURED_TYPES.includes(d.type)).sort((a,b)=>annualRateOf(a)-annualRateOf(b));
+      const candidate = unsecured[0];
+      detail = `แม้ตัดค่าใช้จ่าย "ตัดได้" ทั้งหมด (฿${money(Math.round(f.cuttable))}) แล้ว ยังขาดอีกประมาณ ฿${money(Math.round(stillShort))}/เดือน `
+        + (candidate
+            ? `พิจารณาติดต่อเจ้าหนี้ของ "${candidate.name}" (ดอกเบี้ย ${annualRateOf(candidate).toFixed(1)}%/ปี ค่างวด ฿${money(candidate.minPayment)}/เดือน) เพื่อขอพักชำระหนี้ชั่วคราวหรือปรับโครงสร้างหนี้อย่างเป็นทางการก่อน เพราะเป็นหนี้ไม่มีหลักประกันที่ดอกเบี้ยต่ำสุดในกลุ่มนี้ — พักไว้ก่อนจะเพิ่มภาระดอกเบี้ยน้อยที่สุดเมื่อเทียบกับก้อนอื่น`
+            : `ควรติดต่อเจ้าหนี้เพื่อเจรจาปรับโครงสร้างหนี้`)
+        + ` ส่วนหนี้ที่มีหลักประกัน เช่น บ้านหรือรถยนต์ ควรพยายามชำระต่อเนื่องให้ได้มากที่สุดก่อน เพราะเสี่ยงถูกยึดทรัพย์หากผิดนัด`;
+    }
+    insights.push({type:'danger', icon:'⚠️',
+      title:`กระแสเงินสดไม่พอชำระค่างวดขั้นต่ำรวม (ขาดประมาณ ฿${money(Math.round(deficit))}/เดือน)`,
+      detail,
+      action:`สำคัญ: อย่าเงียบหายหรือหยุดจ่ายเฉยๆ เพราะจะเสียประวัติเครดิตและโดนค่าปรับ ควรแจ้งเจ้าหนี้ล่วงหน้าเสมอ — ผู้ที่ค้างชำระบัตรเครดิต/สินเชื่อส่วนบุคคลเกิน 120 วันและมีหนี้รวมไม่เกิน 2 ล้านบาท อาจเข้าเงื่อนไข "คลินิกแก้หนี้ by SAM" (ดอกเบี้ยลดเหลือ 3-5%/ปี ผ่อนได้นานสุด 10 ปี) — www.คลินิกแก้หนี้.com หรือโทร 1443`});
+  }
+
+  /* 6) Quick win: smallest debt about to close soon under the current plan */
+  if(currentResult){
+    const smallest = [...debts].sort((a,b)=>a.principal-b.principal)[0];
+    const info = currentResult.perDebt.find(p=>p.id===smallest.id);
+    if(info && info.closedMonth && info.closedMonth<=6){
+      insights.push({type:'success', icon:'🎉',
+        title:`ใกล้ปิดหนี้ก้อนแรกแล้ว!`,
+        detail:`"${smallest.name}" (คงเหลือ ฿${money(smallest.principal)}) คาดว่าจะปิดได้ภายใน ${monthLabel(info.closedMonth)} ตามแผนปัจจุบัน เมื่อปิดแล้วเงินขั้นต่ำ ฿${money(smallest.minPayment)}/เดือนจะว่างไปช่วยหนี้ก้อนถัดไปทันที`,
+        action:''});
+    }
+  }
+
+  return insights;
+}
+function debtInsightCardHTML(ins){
+  return `<div class="insight-card ${ins.type}">
+    <div class="it">${ins.icon} ${esc(ins.title)}</div>
+    <div class="id">${esc(ins.detail)}</div>
+    ${ins.action?`<div class="ia">👉 ${esc(ins.action)}</div>`:''}
+  </div>`;
 }
 
 /* =========================================================================
@@ -685,1188 +692,860 @@ function renderAlertStrip(){
    ========================================================================= */
 function renderDashboard(){
   const main = document.getElementById('main');
-  const orders = activeOrders();
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayOrders = orders.filter(o=>o.timestamp>=today.getTime());
-  const todayRevenue = todayOrders.reduce((s,o)=>s+o.total,0);
-  const weekStart = today.getTime() - 6*86400000;
-  const weekOrders = orders.filter(o=>o.timestamp>=weekStart);
-  const weekRevenue = weekOrders.reduce((s,o)=>s+o.total,0);
+  const debts = activeDebts();
+  const totalOriginal = DB.debts.reduce((s,d)=>s+Number(d.originalPrincipal||d.principal||0),0);
+  const totalOutstanding = debts.reduce((s,d)=>s+Number(d.principal||0),0);
+  const paidSoFar = Math.max(0, totalOriginal - totalOutstanding);
+  const pct = totalOriginal>0 ? Math.min(100, Math.round(paidSoFar/totalOriginal*100)) : 0;
+  const f = computeFinance();
+  const plan = currentPlanResult();
+
+  const now = new Date();
+  const thisMonthKey = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const paidThisMonth = DB.payments.filter(p=>p.date && p.date.startsWith(thisMonthKey)).reduce((s,p)=>s+Number(p.actualAmount||0),0);
+  const plannedThisMonth = f.totalMinPayment + Number(DB.extraPayment||0);
+  const remainThisMonth = Math.max(0, plannedThisMonth - paidThisMonth);
 
   main.innerHTML = `
-    <div class="page-title">📊 ภาพรวมการขาย</div>
+    <div class="page-title">📊 ภาพรวมสถานะการเงิน</div>
+    ${!debts.length ? `<div class="card empty">ยังไม่มีข้อมูลหนี้ — ไปที่เมนู "หนี้ของฉัน" เพื่อเริ่มเพิ่มหนี้ก้อนแรก</div>` : `
     <div class="stat-grid">
-      <div class="stat"><div class="v">${money(todayRevenue)}</div><div class="l">ยอดขายวันนี้ (฿)</div></div>
-      <div class="stat"><div class="v">${todayOrders.length}</div><div class="l">ออเดอร์วันนี้</div></div>
-      <div class="stat"><div class="v">${money(weekRevenue)}</div><div class="l">ยอดขาย 7 วันล่าสุด</div></div>
-      <div class="stat"><div class="v">${orders.length}</div><div class="l">ออเดอร์ทั้งหมด</div></div>
+      <div class="stat"><div class="v">฿${money(totalOriginal)}</div><div class="l">หนี้ทั้งหมด</div></div>
+      <div class="stat"><div class="v">฿${money(totalOutstanding)}</div><div class="l">หนี้คงเหลือ</div></div>
+      <div class="stat"><div class="v">฿${money(paidSoFar)}</div><div class="l">ชำระไปแล้ว</div></div>
+      <div class="stat"><div class="v">฿${money(f.totalMinPayment)}</div><div class="l">ค่างวดขั้นต่ำรวม/เดือน</div></div>
+      <div class="stat accent"><div class="v">฿${money(f.extraCapacity)}</div><div class="l">เงินที่สามารถโปะได้/เดือน</div></div>
+      <div class="stat"><div class="v">${plan && plan.feasible ? monthLabel(plan.months) : (plan? 'เกิน 50 ปี':'-')}</div><div class="l">คาดว่าจะปลดหนี้ (แผนปัจจุบัน)</div></div>
     </div>
     <div class="card">
-      <div class="row wrap" style="align-items:center;justify-content:space-between">
-        <b>สรุปยอดขาย</b>
-        <div class="row" style="gap:6px">
-          <button class="btn btn-outline btn-sm" onclick="exportExcel()">⬇️ Export Excel</button>
-        </div>
-      </div>
-      <div class="tabs" style="margin-top:12px">
-        <button class="tab active" id="dtab-day" onclick="setDashRange('day')">รายวัน</button>
-        <button class="tab" id="dtab-week" onclick="setDashRange('week')">รายสัปดาห์</button>
-        <button class="tab" id="dtab-month" onclick="setDashRange('month')">รายเดือน</button>
-        <button class="tab" id="dtab-custom" onclick="setDashRange('custom')">กำหนดเอง</button>
-      </div>
-      <div id="dash-custom-range" style="display:none" class="row wrap">
-        <div class="grow"><label>วันที่เริ่มต้น</label><input type="date" id="dash-start"></div>
-        <div class="grow"><label>วันที่สิ้นสุด</label><input type="date" id="dash-end"></div>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn btn-primary btn-sm" onclick="runDashboard()">ดูข้อมูล (ย้อนหลังได้สูงสุด 30 วัน)</button>
-      </div>
-      <div class="divider"></div>
-      <div id="dash-result"></div>
-    </div>`;
-  window._dashRange = 'day';
-  runDashboard();
-}
-function setDashRange(r){
-  window._dashRange = r;
-  ['day','week','month','custom'].forEach(k=>document.getElementById('dtab-'+k).classList.toggle('active', k===r));
-  document.getElementById('dash-custom-range').style.display = r==='custom' ? 'flex' : 'none';
-}
-function runDashboard(){
-  const r = window._dashRange || 'day';
-  let start, end = Date.now();
-  const now = new Date(); now.setHours(0,0,0,0);
-  if(r==='day') start = now.getTime();
-  else if(r==='week') start = now.getTime() - 6*86400000;
-  else if(r==='month') start = now.getTime() - 29*86400000;
-  else {
-    const s = document.getElementById('dash-start').value, e = document.getElementById('dash-end').value;
-    if(!s || !e){ toast('กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด'); return; }
-    start = new Date(s).setHours(0,0,0,0);
-    end = new Date(e).setHours(23,59,59,999);
-    if((end-start) > 30*86400000 + 86400000){ toast('เลือกช่วงเวลาได้ไม่เกิน 30 วัน'); return; }
-  }
-  const orders = activeOrders().filter(o=>o.timestamp>=start && o.timestamp<=end);
-  const revenue = orders.reduce((s,o)=>s+o.total,0);
-  const byProduct = {};
-  orders.forEach(o=>o.items.forEach(it=>{
-    byProduct[it.name] = byProduct[it.name] || {qty:0, revenue:0};
-    byProduct[it.name].qty += it.qty; byProduct[it.name].revenue += it.qty*it.price;
-  }));
-  const byUser = {};
-  orders.forEach(o=>{ byUser[o.cashier] = (byUser[o.cashier]||0) + o.total; });
-
-  const rows = Object.entries(byProduct).map(([name,v])=>`<tr><td>${esc(name)}</td><td>${v.qty}</td><td>${money(v.revenue)}</td></tr>`).join('');
-  const userRows = Object.entries(byUser).map(([u,v])=>`<tr><td>${esc(u)}</td><td>${money(v)}</td></tr>`).join('');
-
-  document.getElementById('dash-result').innerHTML = `
-    <div class="row wrap" style="gap:14px;margin-bottom:10px">
-      <div><b>${orders.length}</b> ออเดอร์</div><div><b>${money(revenue)}</b> บาท</div>
+      <div class="row" style="justify-content:space-between"><b>ความคืบหน้าการปลดหนี้</b><b>${pct}%</b></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="hint">ชำระไปแล้ว ฿${money(paidSoFar)} จากทั้งหมด ฿${money(totalOriginal)}</div>
     </div>
-    <b style="font-size:13px">ขายตามสินค้า</b>
-    <div class="tbl-wrap"><table><tr><th>สินค้า</th><th>จำนวน</th><th>ยอดขาย</th></tr>${rows || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}</table></div>
-    <div class="divider"></div>
-    <b style="font-size:13px">ขายตามผู้ใช้งาน</b>
-    <div class="tbl-wrap"><table><tr><th>ผู้ขาย</th><th>ยอดขาย</th></tr>${userRows || '<tr><td colspan=2 class="empty">ไม่มีข้อมูล</td></tr>'}</table></div>
-  `;
-  window._dashOrders = orders;
-}
-function exportExcel(){
-  const orders = window._dashOrders && window._dashOrders.length ? window._dashOrders : activeOrders();
-  if(!orders.length){ toast('ไม่มีข้อมูลสำหรับ Export'); return; }
-  const rows = [];
-  orders.forEach(o=>{
-    o.items.forEach(it=>{
-      rows.push({
-        'เลขที่ Order': o.orderNo, 'วันที่': fmtDate(o.timestamp), 'เวลา': fmtTime(o.timestamp),
-        'สินค้า': it.name, 'จำนวน': it.qty, 'ราคาต่อหน่วย': it.price, 'รวม': it.qty*it.price,
-        'วิธีชำระเงิน': o.paymentMethodName, 'รับเงิน': o.received||'', 'เงินทอน': o.change||'',
-        'ผู้คิดเงิน': o.cashier
-      });
-    });
-  });
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'ยอดขาย');
-  XLSX.writeFile(wb, `sales_export_${Date.now()}.xlsx`);
-  logActivity('Export Excel', `ส่งออกข้อมูลยอดขาย ${orders.length} ออเดอร์`);
+    <div class="card">
+      <b>เดือนนี้ (${now.toLocaleDateString('th-TH',{month:'long',year:'numeric'})})</b>
+      <div class="row wrap" style="margin-top:10px;gap:16px">
+        <div>🎯 ต้องชำระทั้งหมด <b>฿${money(plannedThisMonth)}</b></div>
+        <div>✅ ชำระแล้ว <b style="color:var(--good)">฿${money(paidThisMonth)}</b></div>
+        <div>⚠️ เหลือ <b style="color:${remainThisMonth>0?'var(--danger)':'var(--good)'}">฿${money(remainThisMonth)}</b></div>
+      </div>
+    </div>`}
+    <div class="card">
+      <b>สรุปกระแสเงินสดต่อเดือน</b>
+      <table style="margin-top:8px">
+        <tr><td>รายได้สุทธิโดยประมาณ</td><td style="text-align:right">฿${money(f.income)}</td></tr>
+        <tr><td>ค่าใช้จ่ายจำเป็น</td><td style="text-align:right">-฿${money(f.essential)}</td></tr>
+        <tr><td>ค่าใช้จ่ายลดได้ + ตัดได้</td><td style="text-align:right">-฿${money(f.reducible+f.cuttable)}</td></tr>
+        <tr><td>เงินสำรอง/ออม</td><td style="text-align:right">-฿${money(f.savings)}</td></tr>
+        <tr style="font-weight:700"><td>เงินคงเหลือสำหรับหนี้</td><td style="text-align:right">฿${money(f.availableForDebt)}</td></tr>
+      </table>
+      ${f.availableForDebt < f.totalMinPayment ? `<div class="check-alert show" style="margin-top:10px">เงินคงเหลือไม่พอชำระค่างวดขั้นต่ำรวม (฿${money(f.totalMinPayment)}) กรุณาทบทวนค่าใช้จ่ายที่เมนู "การเงิน"</div>` : ''}
+    </div>
+    ${debts.length ? `<div class="card">
+      <b>💡 คำแนะนำปลดหนี้อัจฉริยะ</b>
+      <div style="margin-top:10px">
+        ${(()=>{ const ins = computeDebtInsights(); return ins.length ? ins.map(debtInsightCardHTML).join('') : '<div class="hint">ยังไม่มีคำแนะนำเพิ่มเติมตอนนี้ — สถานะการเงินของคุณดูโอเคดี</div>'; })()}
+      </div>
+      <div class="hint" style="margin-top:6px">คำแนะนำเหล่านี้คำนวณจากตัวเลขที่คุณกรอกไว้ เพื่อเป็นแนวทางเบื้องต้นเท่านั้น ไม่ใช่คำแนะนำทางการเงินหรือกฎหมายจากผู้เชี่ยวชาญเฉพาะทาง ก่อนตัดสินใจสำคัญ (เช่น พักชำระหนี้ ปรับโครงสร้างหนี้) ควรปรึกษาธนาคารเจ้าหนี้โดยตรงหรือนักวางแผนการเงิน</div>
+    </div>` : ''}`;
 }
 
 /* =========================================================================
-   PRODUCTS
+   DEBTS
    ========================================================================= */
-function renderProducts(){
+function renderDebts(){
   const main = document.getElementById('main');
   main.innerHTML = `
-    <div class="page-title">📦 จัดการรายการสินค้า</div>
-    <div class="row" style="margin-bottom:12px">
-      <button class="btn btn-primary grow" onclick="openProductForm()">+ เพิ่มสินค้า</button>
-    </div>
-    <div class="searchbar"><input type="text" id="prod-search" placeholder="ค้นหาสินค้า..." oninput="renderProductList()"></div>
-    <div class="card" id="prod-list"></div>`;
-  renderProductList();
+    <div class="page-title">💳 หนี้ของฉัน</div>
+    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openDebtForm()">+ เพิ่มหนี้</button></div>
+    <div class="card" id="debt-list"></div>`;
+  renderDebtList();
 }
-function renderProductList(){
-  const q = (document.getElementById('prod-search').value||'').toLowerCase();
-  const list = DB.products.filter(p=>p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
-  document.getElementById('prod-list').innerHTML = list.length ? list.map(p=>`
-    <div class="list-item">
-      ${p.image ? `<img class="thumb" src="${p.image}">` : `<div class="thumb ph">📦</div>`}
-      <div class="grow">
-        <div class="li-title">${esc(p.name)} <span class="badge ${p.active?'ok':'off'}">${p.active?'เปิดใช้งาน':'ปิดใช้งาน'}</span></div>
-        <div class="li-sub">รหัส ${p.id} · คงเหลือ ${p.qty} / ${p.initialQty} · ขาย ฿${money(p.price)} · ต้นทุน ฿${money(calcProductCost(p))}</div>
-      </div>
-      <div class="li-actions">
-        <button class="btn btn-outline btn-sm" onclick="openProductForm('${p.id}')">แก้ไข</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">ลบ</button>
-      </div>
-    </div>`).join('') : `<div class="empty">ยังไม่มีรายการสินค้า</div>`;
-}
-function openProductForm(id){
-  const p = id ? DB.products.find(x=>x.id===id) : null;
-  currentEditImg.product = p ? p.image : '';
-  const matOptions = DB.materials.map(m=>{
-    const sel = p && p.materials && p.materials.find(x=>x.materialId===m.id);
-    return `<div class="perm-item"><input type="checkbox" data-mat="${m.id}" ${sel?'checked':''} onchange="updateCostEstimate()"> ${esc(m.name)} (${m.unit}) · ฿${money(m.costPerUnit||0)}/${m.unit}
-      <input type="number" min="0" step="0.01" style="width:60px;margin-left:auto" id="matqty-${m.id}" value="${sel?sel.qty:0}" placeholder="ปริมาณ" oninput="updateCostEstimate()"></div>`;
-  }).join('') || '<div class="hint">ยังไม่มีวัตถุดิบในระบบ</div>';
-
-  openModal(`
-    <div class="modal-head"><h3>${p?'แก้ไขสินค้า':'เพิ่มสินค้า'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    ${p ? `<div class="hint">รหัสสินค้า: <b>${p.id}</b></div>` : `<div class="hint">รหัสสินค้าจะถูกสร้างอัตโนมัติเมื่อบันทึก</div>`}
-    <label>ชื่อสินค้า <span class="req">*</span></label>
-    <input type="text" id="pf-name" value="${p?esc(p.name):''}">
-    <label>รายละเอียดสินค้า</label>
-    <textarea id="pf-desc">${p?esc(p.desc):''}</textarea>
-    <div class="row">
-      <div class="grow"><label>จำนวน <span class="req">*</span></label><input type="number" min="0" id="pf-qty" value="${p?p.qty:''}"></div>
-      <div class="grow"><label>ราคา <span class="req">*</span></label><input type="number" min="0" step="0.01" id="pf-price" value="${p?p.price:''}" oninput="updateCostEstimate()"></div>
-    </div>
-    ${p ? `<div class="hint">คงเหลือปัจจุบัน ${p.qty} จากทั้งหมด ${p.initialQty} (ตัดสต็อกอัตโนมัติเมื่อขาย)</div>` : ''}
-    <label>รูปภาพสินค้า</label>
-    ${uploadBoxHTML('pf-imgbox','product', p?p.image:'', 'แตะเพื่ออัปโหลดภาพสินค้า')}
-    <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
-      <label class="switch"><input type="checkbox" id="pf-active" ${(!p||p.active)?'checked':''}><span class="slider"></span></label>
-      เปิดใช้งานสินค้านี้
-    </label>
-    <div class="divider"></div>
-    <b style="font-size:13px">ต้นทุนวัตถุดิบ (สำหรับคำนวณกำไร/ขาดทุน)</b>
-    <div class="perm-grid" style="grid-template-columns:1fr;margin-top:8px">${matOptions}</div>
-    <div class="card" style="background:var(--teal-100);box-shadow:none;padding:12px 14px;margin-top:10px" id="cost-estimate-box"></div>
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveProduct(${p?`'${p.id}'`:'null'})">บันทึก</button>
-  `);
-  updateCostEstimate();
-}
-function updateCostEstimate(){
-  const box = document.getElementById('cost-estimate-box');
-  if(!box) return;
-  let cost = 0;
-  document.querySelectorAll('[data-mat]').forEach(cb=>{
-    if(cb.checked){
-      const qtyInput = document.getElementById('matqty-'+cb.dataset.mat);
-      const mat = DB.materials.find(m=>m.id===cb.dataset.mat);
-      if(mat && qtyInput) cost += Number(mat.costPerUnit||0) * (Number(qtyInput.value)||0);
-    }
-  });
-  const price = Number(document.getElementById('pf-price')?.value)||0;
-  const profit = price - cost;
-  const margin = price>0 ? (profit/price*100) : 0;
-  box.innerHTML = `
-    <div class="row wrap" style="justify-content:space-between;font-size:13px">
-      <span>ต้นทุนรวม/ชิ้น: <b>฿${money(cost)}</b></span>
-      <span>กำไร/ชิ้น: <b style="color:${profit>=0?'var(--teal-700)':'var(--danger)'}">฿${money(profit)}</b></span>
-      <span>อัตรากำไร: <b>${margin.toFixed(1)}%</b></span>
-    </div>`;
-}
-function deleteProduct(id){
-  if(!confirm('ยืนยันการลบสินค้านี้?')) return;
-  const p = DB.products.find(x=>x.id===id);
-  DB.products = DB.products.filter(x=>x.id!==id);
-  logActivity('ลบสินค้า', `ลบสินค้า ${p.name} (${id})`);
-  saveDB(); renderProductList();
-}
-function saveProduct(id){
-  const name = document.getElementById('pf-name').value.trim();
-  const qty = document.getElementById('pf-qty').value;
-  const price = document.getElementById('pf-price').value;
-  if(!name){ toast('กรุณากรอกชื่อสินค้า'); return; }
-  if(qty==='' || Number(qty)<0){ toast('กรุณากรอกจำนวนให้ถูกต้อง'); return; }
-  if(price==='' || Number(price)<0){ toast('กรุณากรอกราคาให้ถูกต้อง'); return; }
-  const materials = [];
-  document.querySelectorAll('[data-mat]').forEach(cb=>{
-    if(cb.checked){
-      const q = Number(document.getElementById('matqty-'+cb.dataset.mat).value)||0;
-      materials.push({materialId:cb.dataset.mat, qty:q});
-    }
-  });
-  const now = Date.now();
-  if(id){
-    const p = DB.products.find(x=>x.id===id);
-    p.name=name; p.desc=document.getElementById('pf-desc').value.trim(); p.price=Number(price);
-    p.qty=Number(qty); p.active=document.getElementById('pf-active').checked;
-    p.image=currentEditImg.product||p.image||''; p.materials=materials;
-    p.updatedBy=SESSION.username; p.updatedAt=now;
-    logActivity('แก้ไขสินค้า', `แก้ไขสินค้า ${p.name} (${id})`);
-  } else {
-    const code = nextCode('P', 'product');
-    DB.products.push({
-      id:code, name, desc:document.getElementById('pf-desc').value.trim(), price:Number(price),
-      qty:Number(qty), initialQty:Number(qty), active:document.getElementById('pf-active').checked,
-      image:currentEditImg.product||'', materials,
-      createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now
-    });
-    logActivity('เพิ่มสินค้า', `เพิ่มสินค้า ${name} (${code})`);
-  }
-  saveDB(); closeModal(); renderProductList();
-}
-
-/* =========================================================================
-   MATERIALS (raw materials / inventory)
-   ========================================================================= */
-function renderMaterials(){
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">🧺 จัดการวัตถุดิบ</div>
-    <div class="row" style="margin-bottom:12px">
-      <button class="btn btn-primary grow" onclick="openMaterialForm()">+ เพิ่มวัตถุดิบ</button>
-    </div>
-    <div class="searchbar"><input type="text" id="mat-search" placeholder="ค้นหาวัตถุดิบ..." oninput="renderMaterialList()"></div>
-    <div class="card" id="mat-list"></div>
-    <div class="card">
-      <b>ประวัติการเคลื่อนไหววัตถุดิบ</b>
-      <div class="tbl-wrap" style="margin-top:8px">
-        <table><tr><th>วันที่</th><th>วัตถุดิบ</th><th>ประเภท</th><th>จำนวน</th><th>โดย</th></tr>
-        ${(DB.materials.flatMap(m=>(m.log||[]).map(l=>({...l,name:m.name}))).sort((a,b)=>b.time-a.time).slice(0,30).map(l=>
-          `<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.name)}</td><td>${l.type==='in'?'รับเข้า':'จ่ายออก'}</td><td>${l.qty}</td><td>${esc(l.user)}</td></tr>`
-        ).join('')) || '<tr><td colspan=5 class="empty">ไม่มีข้อมูล</td></tr>'}
-        </table>
-      </div>
-    </div>`;
-  renderMaterialList();
-}
-function renderMaterialList(){
-  const q = (document.getElementById('mat-search').value||'').toLowerCase();
-  const list = DB.materials.filter(m=>m.name.toLowerCase().includes(q) || m.sku.toLowerCase().includes(q));
-  document.getElementById('mat-list').innerHTML = list.length ? list.map(m=>{
-    const low = Number(m.qty) <= Number(m.minQty||0);
-    const soon = m.expiryDate && ((new Date(m.expiryDate)-new Date())/86400000 <= 1);
+function renderDebtList(){
+  const list = DB.debts;
+  document.getElementById('debt-list').innerHTML = list.length ? list.map(d=>{
+    const closed = d.status==='closed';
+    const rateLabel = `${d.interestRate}% ต่อ${d.rateUnit==='month'?'เดือน':'ปี'}`;
     return `<div class="list-item">
-      <div class="thumb ph">🧺</div>
+      <div class="thumb ph">${closed?'✅':'💳'}</div>
       <div class="grow">
-        <div class="li-title">${esc(m.name)} ${low?'<span class="badge danger">ใกล้หมด</span>':''} ${soon?'<span class="badge warn">ใกล้หมดอายุ</span>':''}</div>
-        <div class="li-sub">SKU ${m.sku} · ${esc(m.category||'-')} · คงเหลือ ${m.qty} ${m.unit} (ขั้นต่ำ ${m.minQty||0})</div>
+        <div class="li-title">${esc(d.name)} ${closed?'<span class="badge ok">ปิดแล้ว</span>':''}</div>
+        <div class="li-sub">${esc(d.creditor)} · ${esc(d.type)} · ดอกเบี้ย ${rateLabel} · ขั้นต่ำ ฿${money(d.minPayment)}/เดือน</div>
+        <div class="li-sub">คงเหลือ ฿${money(d.principal)} จาก ฿${money(d.originalPrincipal||d.principal)}</div>
       </div>
       <div class="li-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openStockMove('${m.id}')">รับ/จ่าย</button>
-        <button class="btn btn-outline btn-sm" onclick="openMaterialForm('${m.id}')">แก้ไข</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteMaterial('${m.id}')">ลบ</button>
+        ${closed?'':`<button class="btn btn-ghost btn-sm" onclick="openLogPayment('${d.id}')">บันทึกชำระ</button>`}
+        <button class="btn btn-outline btn-sm" onclick="openDebtForm('${d.id}')">แก้ไข</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDebt('${d.id}')">ลบ</button>
       </div>
     </div>`;
-  }).join('') : `<div class="empty">ยังไม่มีรายการวัตถุดิบ</div>`;
+  }).join('') : `<div class="empty">ยังไม่มีข้อมูลหนี้ — กด "+ เพิ่มหนี้" เพื่อเริ่มต้น</div>`;
 }
-function openMaterialForm(id){
-  const m = id ? DB.materials.find(x=>x.id===id) : null;
+function openDebtForm(id){
+  const d = id ? DB.debts.find(x=>x.id===id) : null;
   openModal(`
-    <div class="modal-head"><h3>${m?'แก้ไขวัตถุดิบ':'เพิ่มวัตถุดิบ'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    ${m ? `<div class="hint">SKU: <b>${m.sku}</b></div>` : `<div class="hint">ระบบจะสร้างรหัส SKU อัตโนมัติ</div>`}
-    <label>ชื่อวัตถุดิบ <span class="req">*</span></label>
-    <input type="text" id="mf-name" value="${m?esc(m.name):''}">
+    <div class="modal-head"><h3>${d?'แก้ไขหนี้':'เพิ่มหนี้'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <b style="font-size:13px">ข้อมูลพื้นฐาน</b>
+    <label>ชื่อหนี้ <span class="req">*</span></label>
+    <input type="text" id="df-name" value="${d?esc(d.name):''}" placeholder="เช่น บัตรเครดิต KTC">
     <div class="row">
-      <div class="grow"><label>หมวดหมู่</label><input type="text" id="mf-cat" value="${m?esc(m.category||''):''}"></div>
-      <div class="grow"><label>หน่วยนับ <span class="req">*</span></label>
-        <select id="mf-unit"><option ${m&&m.unit==='กิโลกรัม'?'selected':''}>กิโลกรัม</option><option ${m&&m.unit==='กรัม'?'selected':''}>กรัม</option><option ${m&&m.unit==='ชิ้น'?'selected':''}>ชิ้น</option><option ${m&&m.unit==='ลิตร'?'selected':''}>ลิตร</option><option ${m&&m.unit==='มิลลิลิตร'?'selected':''}>มิลลิลิตร</option></select>
-      </div>
+      <div class="grow"><label>เจ้าหนี้</label><input type="text" id="df-creditor" value="${d?esc(d.creditor):''}"></div>
+      <div class="grow"><label>ประเภทหนี้</label><select id="df-type">${DEBT_TYPES.map(t=>`<option ${d&&d.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
+    <label>ยอดเงินต้นคงเหลือ (บาท) <span class="req">*</span></label>
+    <input type="number" min="0" id="df-principal" value="${d?d.principal:''}">
+    <div class="divider"></div>
+    <b style="font-size:13px">ดอกเบี้ย</b>
+    <div class="row">
+      <div class="grow"><label>อัตราดอกเบี้ย (%) <span class="req">*</span></label><input type="number" min="0" step="0.01" id="df-rate" value="${d?d.interestRate:''}"></div>
+      <div class="grow"><label>หน่วย</label><select id="df-rateunit"><option value="year" ${d&&d.rateUnit==='year'?'selected':''}>% ต่อปี</option><option value="month" ${d&&d.rateUnit==='month'?'selected':''}>% ต่อเดือน</option></select></div>
     </div>
     <div class="row">
-      <div class="grow"><label>ปริมาณคงเหลือ <span class="req">*</span></label><input type="number" min="0" step="0.01" id="mf-qty" value="${m?m.qty:0}"></div>
-      <div class="grow"><label>ปริมาณขั้นต่ำ (แจ้งเตือน)</label><input type="number" min="0" step="0.01" id="mf-min" value="${m?m.minQty||0:0}"></div>
+      <div class="grow"><label>ประเภทดอกเบี้ย</label><select id="df-itype"><option value="fixed" ${d&&d.interestType==='fixed'?'selected':''}>Fixed</option><option value="variable" ${d&&d.interestType==='variable'?'selected':''}>Variable</option></select></div>
+      <div class="grow"><label>วิธีคิดดอกเบี้ย</label><select id="df-calc"><option value="reducing" ${!d||d.calcMethod==='reducing'?'selected':''}>ลดต้นลดดอก</option><option value="flat" ${d&&d.calcMethod==='flat'?'selected':''}>Flat rate</option></select></div>
+    </div>
+    <div class="divider"></div>
+    <b style="font-size:13px">การชำระ</b>
+    <div class="row">
+      <div class="grow"><label>ค่างวดขั้นต่ำ (บาท) <span class="req">*</span></label><input type="number" min="0" id="df-minpay" value="${d?d.minPayment:''}"></div>
+      <div class="grow"><label>จำนวนงวดที่เหลือ</label><input type="number" min="0" id="df-terms" value="${d&&d.remainingTerms?d.remainingTerms:''}"></div>
     </div>
     <div class="row">
-      <div class="grow"><label>วันที่รับเข้า</label><input type="date" id="mf-received" value="${m&&m.receivedDate?m.receivedDate:''}"></div>
-      <div class="grow"><label>วันหมดอายุ</label><input type="date" id="mf-expiry" value="${m&&m.expiryDate?m.expiryDate:''}"></div>
+      <div class="grow"><label>วันครบกำหนดชำระ (วันที่ของเดือน)</label><input type="number" min="1" max="31" id="df-dueday" value="${d&&d.dueDay?d.dueDay:''}"></div>
+      <div class="grow"><label>วันเริ่มชำระ</label><input type="date" id="df-startdate" value="${d&&d.startDate?d.startDate:''}"></div>
     </div>
-    <label>ต้นทุนต่อหน่วย (บาท)</label>
-    <input type="number" min="0" step="0.01" id="mf-cost" value="${m?m.costPerUnit||0:0}">
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveMaterial(${m?`'${m.id}'`:'null'})">บันทึก</button>
+    <div class="row">
+      <div class="grow"><label>ค่าปรับล่าช้า (บาท)</label><input type="number" min="0" id="df-latefee" value="${d&&d.lateFee?d.lateFee:0}"></div>
+      <div class="grow"><label>ค่าธรรมเนียม (บาท)</label><input type="number" min="0" id="df-fee" value="${d&&d.fee?d.fee:0}"></div>
+    </div>
+    <div class="divider"></div>
+    <b style="font-size:13px">เงื่อนไขพิเศษ</b>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:10px"><label class="switch"><input type="checkbox" id="df-prepay" ${!d||d.prepaymentAllowed?'checked':''}><span class="slider-toggle"></span></label>โปะได้</label>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:8px"><label class="switch"><input type="checkbox" id="df-early" ${!d||d.earlyPayoffAllowed?'checked':''}><span class="slider-toggle"></span></label>ปิดก่อนกำหนดได้</label>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:8px"><label class="switch"><input type="checkbox" id="df-closingfee" ${d&&d.hasClosingFee?'checked':''}><span class="slider-toggle"></span></label>มีค่าปิดบัญชี</label>
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveDebt(${d?`'${d.id}'`:'null'})">บันทึก</button>
   `);
 }
-function saveMaterial(id){
-  const name = document.getElementById('mf-name').value.trim();
-  if(!name){ toast('กรุณากรอกชื่อวัตถุดิบ'); return; }
-  const now = Date.now();
-  if(id){
-    const m = DB.materials.find(x=>x.id===id);
-    m.name=name; m.category=document.getElementById('mf-cat').value.trim(); m.unit=document.getElementById('mf-unit').value;
-    m.qty=Number(document.getElementById('mf-qty').value)||0; m.minQty=Number(document.getElementById('mf-min').value)||0;
-    m.receivedDate=document.getElementById('mf-received').value; m.expiryDate=document.getElementById('mf-expiry').value;
-    m.costPerUnit=Number(document.getElementById('mf-cost').value)||0;
-    m.updatedBy=SESSION.username; m.updatedAt=now;
-    logActivity('แก้ไขวัตถุดิบ', `แก้ไขวัตถุดิบ ${m.name}`);
-  } else {
-    const sku = nextCode('MAT', 'material');
-    DB.materials.push({
-      id:uid(), sku, name, category:document.getElementById('mf-cat').value.trim(), unit:document.getElementById('mf-unit').value,
-      qty:Number(document.getElementById('mf-qty').value)||0, minQty:Number(document.getElementById('mf-min').value)||0,
-      receivedDate:document.getElementById('mf-received').value, expiryDate:document.getElementById('mf-expiry').value,
-      costPerUnit:Number(document.getElementById('mf-cost').value)||0, log:[],
-      createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now
-    });
-    logActivity('เพิ่มวัตถุดิบ', `เพิ่มวัตถุดิบ ${name} (${sku})`);
-  }
-  saveDB(); closeModal(); renderMaterials();
-}
-function deleteMaterial(id){
-  const usedBy = DB.products.filter(p=>(p.materials||[]).some(mu=>mu.materialId===id));
-  if(usedBy.length){ toast(`ไม่สามารถลบได้ วัตถุดิบนี้ถูกใช้ในสินค้า ${usedBy.length} รายการ`); return; }
-  if(!confirm('ยืนยันการลบวัตถุดิบนี้?')) return;
-  const m = DB.materials.find(x=>x.id===id);
-  DB.materials = DB.materials.filter(x=>x.id!==id);
-  logActivity('ลบวัตถุดิบ', `ลบวัตถุดิบ ${m.name}`);
-  saveDB(); renderMaterials();
-}
-function openStockMove(id){
-  const m = DB.materials.find(x=>x.id===id);
-  openModal(`
-    <div class="modal-head"><h3>รับเข้า/จ่ายออก: ${esc(m.name)}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <div class="hint">คงเหลือปัจจุบัน: ${m.qty} ${m.unit}</div>
-    <label>ประเภทรายการ</label>
-    <select id="sm-type"><option value="in">รับเข้า</option><option value="out">จ่ายออก</option></select>
-    <label>จำนวน <span class="req">*</span></label>
-    <input type="number" min="0.01" step="0.01" id="sm-qty">
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveStockMove('${id}')">บันทึก</button>
-  `);
-}
-function saveStockMove(id){
-  const type = document.getElementById('sm-type').value;
-  const qty = Number(document.getElementById('sm-qty').value);
-  if(!qty || qty<=0){ toast('กรุณากรอกจำนวนให้ถูกต้อง'); return; }
-  const m = DB.materials.find(x=>x.id===id);
-  if(type==='out' && qty > m.qty){ toast('จำนวนจ่ายออกมากกว่าคงเหลือ'); return; }
-  m.qty = type==='in' ? m.qty+qty : m.qty-qty;
-  m.log = m.log || [];
-  m.log.push({time:Date.now(), type, qty, user:SESSION.username});
-  logActivity(type==='in'?'รับเข้าวัตถุดิบ':'จ่ายออกวัตถุดิบ', `${m.name} จำนวน ${qty} ${m.unit}`);
-  saveDB(); closeModal(); renderMaterials();
-}
-
-/* =========================================================================
-   SELL (product selection / cart)
-   ========================================================================= */
-function cartCount(){ return Object.values(CART).reduce((s,q)=>s+q,0); }
-function cartTotal(){ return Object.entries(CART).reduce((s,[pid,q])=>{ const p=DB.products.find(x=>x.id===pid); return s + (p?p.price*q:0); },0); }
-function renderSell(){
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">🛒 เลือกซื้อสินค้า</div>
-    <div class="searchbar"><input type="text" id="sell-search" placeholder="ค้นหาสินค้า..." oninput="renderSellGrid()"></div>
-    <div class="prod-grid" id="sell-grid"></div>`;
-  renderSellGrid();
-  updateCartFab();
-}
-function renderSellGrid(){
-  const q = (document.getElementById('sell-search').value||'').toLowerCase();
-  const items = DB.products.filter(p=>p.active && p.name.toLowerCase().includes(q));
-  document.getElementById('sell-grid').innerHTML = items.length ? items.map(p=>{
-    const out = p.qty<=0;
-    const inCart = CART[p.id]||0;
-    return `<div class="prod-card ${out?'disabled':''}">
-      <div class="pimg">${p.image?`<img src="${p.image}">`:'📦'}</div>
-      <div class="pbody">
-        <div class="pname">${esc(p.name)}</div>
-        <div class="pdesc">${esc(p.desc||'')}</div>
-        <div class="pprice">฿${money(p.price)}</div>
-        <div class="pstock">${out?'สินค้าหมด':'คงเหลือ '+p.qty}</div>
-        ${inCart>0 ? `
-          <div class="qty-stepper">
-            <button onclick="changeCart('${p.id}',-1)">–</button>
-            <span class="n">${inCart}</span>
-            <button onclick="changeCart('${p.id}',1)">+</button>
-          </div>` : `<button class="btn btn-ghost btn-sm" onclick="changeCart('${p.id}',1)">+ ใส่ตะกร้า</button>`}
-      </div>
-    </div>`;
-  }).join('') : `<div class="empty" style="grid-column:1/-1">ไม่พบสินค้า</div>`;
-}
-function changeCart(pid, delta){
-  const p = DB.products.find(x=>x.id===pid);
-  const cur = CART[pid]||0;
-  const next = cur + delta;
-  if(next<=0){ delete CART[pid]; }
-  else if(next > p.qty){ toast('จำนวนเกินสต็อกคงเหลือ'); return; }
-  else CART[pid] = next;
-  renderSellGrid(); updateCartFab();
-}
-function updateCartFab(){
-  const fab = document.getElementById('cart-fab');
-  const n = cartCount();
-  fab.classList.toggle('show', n>0);
-  document.getElementById('cart-fab-text').textContent = `${n} รายการ · ฿${money(cartTotal())}`;
-}
-
-/* =========================================================================
-   CHECKOUT
-   ========================================================================= */
-function renderCheckout(){
-  const main = document.getElementById('main');
-  if(cartCount()===0){
-    main.innerHTML = `<div class="page-title">🧮 คิดเงิน</div><div class="empty">ยังไม่มีสินค้าในตะกร้า — กลับไปหน้าเลือกซื้อสินค้า</div>
-    <button class="btn btn-primary btn-block" onclick="go('sell')">ไปหน้าเลือกซื้อสินค้า</button>`;
-    return;
-  }
-  const total = cartTotal();
-  const items = Object.entries(CART).map(([pid,q])=>{ const p=DB.products.find(x=>x.id===pid); return {p,q}; });
-  const itemRows = items.map(({p,q})=>`<tr><td>${esc(p.name)}</td><td>${q}</td><td>฿${money(p.price)}</td><td>฿${money(p.price*q)}</td></tr>`).join('');
-  const pmOptions = DB.paymentMethods.map(pm=>`
-    <label class="list-item" style="cursor:pointer" onclick="selectPM('${pm.id}')">
-      ${pm.icon?`<img class="thumb" src="${pm.icon}">`:`<div class="thumb ph">💳</div>`}
-      <div class="grow"><div class="li-title">${esc(pm.name)}</div><div class="li-sub">${esc(pm.desc||'')}</div></div>
-      <input type="radio" name="pm" value="${pm.id}" id="pmr-${pm.id}">
-    </label>`).join('');
-
-  main.innerHTML = `
-    <div class="page-title">🧮 คิดเงิน</div>
-    <div class="card">
-      <div class="hint">เลขที่ Order จะถูกสร้างเมื่อชำระเงินสำเร็จ</div>
-      <div class="tbl-wrap"><table><tr><th>สินค้า</th><th>จำนวน</th><th>ราคา</th><th>รวม</th></tr>${itemRows}</table></div>
-      <div class="row" style="justify-content:space-between;font-weight:700;font-size:16px;margin-top:10px">
-        <span>ยอดรวมทั้งหมด</span><span>฿${money(total)}</span>
-      </div>
-    </div>
-    <div class="card">
-      <b>เลือกวิธีการชำระเงิน</b>
-      <div style="margin-top:8px">${pmOptions}</div>
-    </div>
-    <div class="card" id="pm-detail" style="display:none"></div>
-    <div class="row" style="gap:10px">
-      <button class="btn btn-outline grow" onclick="go('sell')">‹ กลับไปเลือกสินค้า</button>
-    </div>
-  `;
-  window._checkoutTotal = total;
-  window._checkoutItems = items;
-}
-function selectPM(pmId){
-  document.getElementById('pmr-'+pmId).checked = true;
-  const pm = DB.paymentMethods.find(x=>x.id===pmId);
-  const total = window._checkoutTotal;
-  const isCash = pm.cash;
-  document.getElementById('pm-detail').style.display='block';
-  document.getElementById('pm-detail').innerHTML = `
-    <b>รายละเอียดการชำระเงิน — ${esc(pm.name)}</b>
-    ${pm.qrImage?`<div style="text-align:center;margin-top:10px"><img src="${pm.qrImage}" style="max-width:180px;border-radius:10px"></div>`:''}
-    ${isCash ? `
-      <label>รับเงิน (บาท) <span class="req">*</span></label>
-      <input type="number" min="0" step="0.01" id="co-received" oninput="calcChange()">
-      <div class="field-err" id="co-received-err" style="display:none"></div>
-      <div class="row" style="justify-content:space-between;margin-top:10px;font-weight:600">
-        <span>เงินทอน</span><span id="co-change">฿0.00</span>
-      </div>
-    ` : `<div class="hint" style="margin-top:8px">ยอดชำระ ฿${money(total)} — ยืนยันเมื่อได้รับการชำระเงินแล้ว</div>`}
-    <div class="check-alert" id="co-alert"></div>
-    <button class="btn btn-primary btn-block" style="margin-top:14px" id="co-confirm-btn" onclick="confirmPayment('${pmId}')" ${isCash?'disabled':''}>ชำระเงินสำเร็จ</button>
-  `;
-  window._isCash = isCash;
-}
-function calcChange(){
-  const total = window._checkoutTotal;
-  const raw = document.getElementById('co-received').value;
-  const btn = document.getElementById('co-confirm-btn');
-  const alertBox = document.getElementById('co-alert');
-  const errBox = document.getElementById('co-received-err');
-  const received = Number(raw);
-  errBox.style.display='none'; alertBox.classList.remove('show');
-  if(raw==='' || isNaN(received) || received<=0){
-    document.getElementById('co-change').textContent = '฿0.00';
-    btn.disabled = true; return;
-  }
-  if(received < total){
-    alertBox.textContent = 'จำนวนเงินที่รับน้อยกว่ายอดรวมทั้งหมด กรุณากรอกใหม่';
-    alertBox.classList.add('show');
-    btn.disabled = true;
-    document.getElementById('co-change').textContent = '฿0.00';
-    return;
-  }
-  document.getElementById('co-change').textContent = '฿'+money(received-total);
-  btn.disabled = false;
-}
-function confirmPayment(pmId){
-  const pm = DB.paymentMethods.find(x=>x.id===pmId);
-  const total = window._checkoutTotal;
-  let received = null, change = null;
-  if(pm.cash){
-    received = Number(document.getElementById('co-received').value);
-    if(!received || received<total){ toast('กรุณากรอกจำนวนเงินที่รับให้ถูกต้อง'); return; }
-    change = received - total;
-  }
-  const items = window._checkoutItems.map(({p,q})=>({productId:p.id, name:p.name, qty:q, price:p.price}));
-  // deduct stock
-  window._checkoutItems.forEach(({p,q})=>{
-    p.qty -= q;
-    // deduct materials used
-    (p.materials||[]).forEach(mu=>{
-      const mat = DB.materials.find(x=>x.id===mu.materialId);
-      if(mat){ mat.qty = Math.max(0, mat.qty - mu.qty*q); mat.log=mat.log||[]; mat.log.push({time:Date.now(),type:'out',qty:mu.qty*q,user:SESSION.username}); }
-    });
-  });
-  const orderNo = nextCode('ORD', 'order');
-  const order = {
-    id: uid(), orderNo, timestamp: Date.now(), items, total,
-    paymentMethodId: pmId, paymentMethodName: pm.name, isCash: !!pm.cash,
-    received, change, cashier: SESSION.username, status:'completed'
+function saveDebt(id){
+  const name = document.getElementById('df-name').value.trim();
+  const principal = Number(document.getElementById('df-principal').value);
+  const rate = Number(document.getElementById('df-rate').value);
+  const minPayment = Number(document.getElementById('df-minpay').value);
+  if(!name){ toast('กรุณากรอกชื่อหนี้'); return; }
+  if(!(principal>0)){ toast('กรุณากรอกยอดเงินต้นให้ถูกต้อง'); return; }
+  if(!(rate>=0)){ toast('กรุณากรอกอัตราดอกเบี้ยให้ถูกต้อง'); return; }
+  if(!(minPayment>0)){ toast('กรุณากรอกค่างวดขั้นต่ำให้ถูกต้อง'); return; }
+  const data = {
+    name, creditor:document.getElementById('df-creditor').value.trim(), type:document.getElementById('df-type').value,
+    principal, interestRate:rate, rateUnit:document.getElementById('df-rateunit').value,
+    interestType:document.getElementById('df-itype').value, calcMethod:document.getElementById('df-calc').value,
+    minPayment, remainingTerms:Number(document.getElementById('df-terms').value)||null,
+    dueDay:Number(document.getElementById('df-dueday').value)||null, startDate:document.getElementById('df-startdate').value||null,
+    lateFee:Number(document.getElementById('df-latefee').value)||0, fee:Number(document.getElementById('df-fee').value)||0,
+    prepaymentAllowed:document.getElementById('df-prepay').checked, earlyPayoffAllowed:document.getElementById('df-early').checked,
+    hasClosingFee:document.getElementById('df-closingfee').checked
   };
-  DB.orders.unshift(order);
-  logActivity('ชำระเงินสำเร็จ', `Order ${orderNo} ยอดรวม ฿${money(total)} โดย ${SESSION.username}`);
-  saveDB();
-  sendLineNotify(order);
-  CART = {};
-  showReceipt(order, true);
-}
-
-/* =========================================================================
-   RECEIPT
-   ========================================================================= */
-function receiptHTML(order){
-  const rows = order.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${it.qty}</td><td>฿${money(it.price)}</td><td>฿${money(it.qty*it.price)}</td></tr>`).join('');
-  const cancelled = order.status==='cancelled';
-  return `
-    <div class="receipt" id="receipt-capture" style="position:relative">
-      ${cancelled ? `<div style="position:absolute;top:14px;right:-6px;background:var(--danger);color:#fff;padding:4px 26px;font-size:11px;font-weight:700;transform:rotate(18deg);box-shadow:0 2px 6px rgba(0,0,0,.2)">ยกเลิกแล้ว</div>` : ''}
-      <div class="rhead">
-        ${DB.shop.image?`<img src="${DB.shop.image}">`:''}
-        <h3>${esc(DB.shop.name)}</h3>
-        <p>${esc(DB.shop.address||'')}</p>
-        <p>${esc(DB.shop.phone||'')}</p>
-      </div>
-      <div class="divider"></div>
-      <p>เลขที่ Order: <b>${order.orderNo}</b></p>
-      <p>วันที่: ${fmtDate(order.timestamp)} เวลา ${fmtTime(order.timestamp)}</p>
-      <table>${rows}</table>
-      <div class="rtotal"><span>รวมทั้งหมด</span><span>฿${money(order.total)}</span></div>
-      <p style="margin-top:8px">ชำระโดย: ${esc(order.paymentMethodName)}</p>
-      ${order.isCash ? `<p>รับเงิน: ฿${money(order.received)} · ทอน: ฿${money(order.change)}</p>` : ''}
-      <p>ผู้คิดเงิน: ${esc(order.cashier)}</p>
-      ${cancelled ? `<div class="divider"></div><p style="color:var(--danger)">ยกเลิกโดย: ${esc(order.cancelledBy||'-')} เมื่อ ${order.cancelledAt?fmtDateTime(order.cancelledAt):'-'}</p>${order.cancelReason?`<p style="color:var(--danger)">เหตุผล: ${esc(order.cancelReason)}</p>`:''}` : ''}
-    </div>`;
-}
-function showReceiptById(orderId){
-  const order = DB.orders.find(o=>o.id===orderId);
-  if(!order){ toast('ไม่พบใบเสร็จนี้'); return; }
-  showReceipt(order, false);
-}
-function showReceipt(order, resetAfterClose){
-  openModal(`
-    <div class="modal-head"><h3>ใบเสร็จรับเงิน</h3><button class="close-x" onclick="closeReceipt(${resetAfterClose?'true':'false'})">✕</button></div>
-    ${receiptHTML(order)}
-    <div class="row wrap" style="margin-top:14px">
-      <button class="btn btn-amber grow" onclick="printReceipt()">🖨️ พิมพ์ใบเสร็จ</button>
-      <button class="btn btn-outline grow" onclick="downloadReceipt('${order.orderNo}')">⬇️ ดาวน์โหลด .jpeg</button>
-    </div>
-    <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="closeReceipt(${resetAfterClose?'true':'false'})">ปิด</button>
-  `);
-}
-function printReceipt(){
-  window.print();
-}
-function downloadReceipt(orderNo){
-  html2canvas(document.getElementById('receipt-capture'), {backgroundColor:'#fff', scale:2}).then(canvas=>{
-    const link = document.createElement('a');
-    link.download = `receipt_${orderNo}.jpeg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.95);
-    link.click();
-  });
-}
-function closeReceipt(resetToSell){
-  closeModal();
-  if(resetToSell) go('sell'); else go('history');
-}
-
-/* LINE Notify (best-effort — browsers block cross-origin POST to notify-api.line.me
-   without a server-side proxy due to CORS. Code included for when hosted behind a proxy
-   or run via server-side automation.) */
-function sendLineNotify(order){
-  const token = DB.settings.lineToken;
-  if(!token) return;
-  const msg = `\nOrder ${order.orderNo} ชำระเงินสำเร็จ\nยอดรวม ฿${money(order.total)}\nวิธีชำระ: ${order.paymentMethodName}\nผู้คิดเงิน: ${order.cashier}`;
-  fetch('https://notify-api.line.me/api/notify', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':'Bearer '+token},
-    body:'message='+encodeURIComponent(msg)
-  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ (อาจติด CORS — ต้องใช้ Proxy ฝั่งเซิร์ฟเวอร์)'); });
-}
-
-/* =========================================================================
-   HISTORY (orders + receipts)
-   ========================================================================= */
-function renderHistory(){
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">🧾 ประวัติการขาย</div>
-    <div class="row" style="margin-bottom:10px">
-      <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑 ล้างข้อมูลประวัติ</button>
-    </div>
-    <div class="searchbar"><input type="text" id="hist-search" placeholder="ค้นหาเลขที่ Order..." oninput="renderHistoryList()"></div>
-    <div id="hist-list"></div>`;
-  renderHistoryList();
-}
-function renderHistoryList(){
-  const q = (document.getElementById('hist-search').value||'').toLowerCase();
-  const list = DB.orders.filter(o=>o.orderNo.toLowerCase().includes(q));
-  document.getElementById('hist-list').innerHTML = list.length ? list.map(o=>{
-    const cancelled = o.status==='cancelled';
-    return `
-    <div class="card" style="padding:12px 14px${cancelled?';opacity:.75':''}">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <b>${o.orderNo}</b>
-        ${cancelled ? `<span class="badge danger">ยกเลิกแล้ว</span>` : `<span class="badge ok">฿${money(o.total)}</span>`}
-      </div>
-      <div class="li-sub">${fmtDateTime(o.timestamp)} · ${o.items.reduce((s,i)=>s+i.qty,0)} ชิ้น · ${esc(o.paymentMethodName)} · โดย ${esc(o.cashier)}</div>
-      ${cancelled ? `<div class="li-sub" style="color:var(--danger)">ยกเลิกโดย ${esc(o.cancelledBy||'-')} · ${o.cancelledAt?fmtDateTime(o.cancelledAt):''}${o.cancelReason?' · เหตุผล: '+esc(o.cancelReason):''}</div>` : ''}
-      <div class="row" style="margin-top:8px">
-        <button class="btn btn-outline btn-sm grow" onclick="showReceiptById('${o.id}')">ดูใบเสร็จ</button>
-        ${cancelled ? '' : `<button class="btn btn-danger btn-sm grow" onclick="openCancelOrder('${o.id}')">ยกเลิก Order</button>`}
-      </div>
-    </div>`;
-  }).join('') : `<div class="empty">ยังไม่มีประวัติการขาย</div>`;
-}
-function openCancelOrder(orderId){
-  const o = DB.orders.find(x=>x.id===orderId);
-  if(!o || o.status==='cancelled') return;
-  openModal(`
-    <div class="modal-head"><h3>ยกเลิก Order ${o.orderNo}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <div class="hint">การยกเลิกจะคืนจำนวนสินค้าและวัตถุดิบที่ตัดสต็อกไปแล้วกลับเข้าคลังทั้งหมด ยอดขายของ Order นี้จะไม่ถูกนับในภาพรวม/กำไร-ขาดทุนอีกต่อไป แต่ยังคงเก็บประวัติไว้เพื่อการตรวจสอบ</div>
-    <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>สินค้า</th><th>จำนวน</th><th>รวม</th></tr>
-    ${o.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${it.qty}</td><td>฿${money(it.qty*it.price)}</td></tr>`).join('')}
-    </table></div>
-    <div class="row" style="justify-content:space-between;font-weight:700;margin-top:8px"><span>ยอดรวม</span><span>฿${money(o.total)}</span></div>
-    <label>เหตุผลในการยกเลิก <span class="req">*</span></label>
-    <textarea id="cancel-reason" placeholder="เช่น ลูกค้าสั่งผิด, สินค้าชำรุด ฯลฯ"></textarea>
-    <div class="field-err" id="cancel-reason-err" style="display:none">กรุณาระบุเหตุผลในการยกเลิก</div>
-    <button class="btn btn-danger btn-block" style="margin-top:16px" onclick="confirmCancelOrder('${o.id}')">ยืนยันยกเลิก Order</button>
-  `);
-}
-function confirmCancelOrder(orderId){
-  const reason = document.getElementById('cancel-reason').value.trim();
-  if(!reason){ document.getElementById('cancel-reason-err').style.display='block'; return; }
-  const o = DB.orders.find(x=>x.id===orderId);
-  if(!o || o.status==='cancelled') { closeModal(); return; }
-  if(!confirm(`ยืนยันยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)}? การกระทำนี้จะคืนสต็อกสินค้าและวัตถุดิบกลับเข้าคลัง`)) return;
-
-  // restore product stock
-  o.items.forEach(it=>{
-    const p = DB.products.find(x=>x.id===it.productId);
-    if(p){
-      p.qty += it.qty;
-      // restore materials used by this product's recipe
-      (p.materials||[]).forEach(mu=>{
-        const mat = DB.materials.find(x=>x.id===mu.materialId);
-        if(mat){
-          mat.qty += mu.qty*it.qty;
-          mat.log = mat.log||[];
-          mat.log.push({time:Date.now(), type:'in', qty:mu.qty*it.qty, user:SESSION.username, note:`คืนสต็อกจากการยกเลิก Order ${o.orderNo}`});
-        }
-      });
-    }
-  });
-  o.status = 'cancelled';
-  o.cancelledBy = SESSION.username;
-  o.cancelledAt = Date.now();
-  o.cancelReason = reason;
-  logActivity('ยกเลิก Order', `ยกเลิก Order ${o.orderNo} ยอด ฿${money(o.total)} เหตุผล: ${reason}`);
-  saveDB();
-  sendLineNotifyCancel(o);
-  closeModal();
-  renderHistoryList();
-  toast('ยกเลิก Order และคืนสต็อกเรียบร้อยแล้ว');
-}
-function sendLineNotifyCancel(order){
-  const token = DB.settings.lineToken;
-  if(!token) return;
-  const msg = `\nOrder ${order.orderNo} ถูกยกเลิก\nยอดรวม ฿${money(order.total)}\nยกเลิกโดย: ${order.cancelledBy}\nเหตุผล: ${order.cancelReason}`;
-  fetch('https://notify-api.line.me/api/notify', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':'Bearer '+token},
-    body:'message='+encodeURIComponent(msg)
-  }).catch(()=>{ console.warn('LINE Notify ส่งไม่สำเร็จ (อาจติด CORS — ต้องใช้ Proxy ฝั่งเซิร์ฟเวอร์)'); });
-}
-function clearHistory(){
-  if(!confirm('ยืนยันการล้างประวัติการขายทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) return;
-  DB.orders = [];
-  logActivity('ล้างประวัติการขาย', 'ล้างประวัติการขายทั้งหมด');
-  saveDB(); renderHistoryList();
-}
-
-/* =========================================================================
-   PROFIT & LOSS
-   ========================================================================= */
-function renderProfit(){
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">📈 กำไร-ขาดทุน</div>
-    <div class="card">
-      <div class="tabs">
-        <button class="tab active" id="ptab-day" onclick="setProfitRange('day')">รายวัน</button>
-        <button class="tab" id="ptab-week" onclick="setProfitRange('week')">รายสัปดาห์</button>
-        <button class="tab" id="ptab-month" onclick="setProfitRange('month')">รายเดือน</button>
-        <button class="tab" id="ptab-custom" onclick="setProfitRange('custom')">กำหนดเอง</button>
-      </div>
-      <div id="profit-custom-range" style="display:none" class="row wrap">
-        <div class="grow"><label>วันที่เริ่มต้น</label><input type="date" id="profit-start"></div>
-        <div class="grow"><label>วันที่สิ้นสุด</label><input type="date" id="profit-end"></div>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn btn-primary btn-sm" onclick="runProfit()">คำนวณกำไร-ขาดทุน</button>
-        <button class="btn btn-outline btn-sm" onclick="exportProfitExcel()">⬇️ Export Excel</button>
-      </div>
-    </div>
-    <div id="profit-result"></div>
-    <div class="card">
-      <p class="hint">💡 ต้นทุนคำนวณจาก "ต้นทุนวัตถุดิบต่อหน่วย" ที่ตั้งค่าไว้ล่าสุดของสินค้าแต่ละรายการ (เมนู "สินค้า") หากมีการเปลี่ยนแปลงต้นทุนวัตถุดิบภายหลัง ตัวเลขในรายงานย้อนหลังจะคำนวณด้วยต้นทุนปัจจุบัน ไม่ใช่ต้นทุน ณ วันที่ขายจริง</p>
-    </div>`;
-  window._profitRange = 'day';
-  runProfit();
-}
-function setProfitRange(r){
-  window._profitRange = r;
-  ['day','week','month','custom'].forEach(k=>document.getElementById('ptab-'+k).classList.toggle('active', k===r));
-  document.getElementById('profit-custom-range').style.display = r==='custom' ? 'flex' : 'none';
-}
-function getProfitRangeBounds(){
-  const r = window._profitRange || 'day';
-  let start, end = Date.now();
-  const now = new Date(); now.setHours(0,0,0,0);
-  if(r==='day') start = now.getTime();
-  else if(r==='week') start = now.getTime() - 6*86400000;
-  else if(r==='month') start = now.getTime() - 29*86400000;
-  else {
-    const s = document.getElementById('profit-start').value, e = document.getElementById('profit-end').value;
-    if(!s || !e) return null;
-    start = new Date(s).setHours(0,0,0,0);
-    end = new Date(e).setHours(23,59,59,999);
+  if(id){
+    const d = DB.debts.find(x=>x.id===id);
+    Object.assign(d, data);
+  } else {
+    DB.debts.push({id:uid(), ...data, originalPrincipal:principal, status:'active', createdAt:Date.now()});
   }
+  saveDB(); closeModal(); renderDebtList();
+}
+function deleteDebt(id){
+  if(!confirm('ยืนยันการลบหนี้นี้? ประวัติการชำระที่เกี่ยวข้องจะถูกลบด้วย')) return;
+  DB.debts = DB.debts.filter(x=>x.id!==id);
+  DB.payments = DB.payments.filter(p=>p.debtId!==id);
+  DB.customOrder = DB.customOrder.filter(x=>x!==id);
+  saveDB(); renderDebtList();
+}
+function openLogPayment(debtId){
+  const d = DB.debts.find(x=>x.id===debtId);
+  const today = new Date().toISOString().slice(0,10);
+  openModal(`
+    <div class="modal-head"><h3>บันทึกการชำระ: ${esc(d.name)}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <div class="hint">คงเหลือปัจจุบัน ฿${money(d.principal)}</div>
+    <label>วันที่ชำระ</label>
+    <input type="date" id="lp-date" value="${today}">
+    <label>จำนวนที่ชำระจริง (บาท) <span class="req">*</span></label>
+    <input type="number" min="0" id="lp-amount" value="${d.minPayment}">
+    <div class="hint">ระบบจะคำนวณดอกเบี้ยของงวดนี้ให้อัตโนมัติจากยอดคงเหลือ แล้วหักเงินต้นจากส่วนที่เหลือ</div>
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveLogPayment('${debtId}')">บันทึกการชำระ</button>
+  `);
+}
+function saveLogPayment(debtId){
+  const d = DB.debts.find(x=>x.id===debtId);
+  const amount = Number(document.getElementById('lp-amount').value);
+  const date = document.getElementById('lp-date').value;
+  if(!(amount>0)){ toast('กรุณากรอกจำนวนเงินให้ถูกต้อง'); return; }
+  const rate = monthlyRate(d);
+  const interest = d.calcMethod==='flat' ? Number(d.originalPrincipal||d.principal)*(rate/100) : Number(d.principal)*(rate/100);
+  const outstandingWithInterest = Number(d.principal) + interest;
+  const interestPaid = Math.min(amount, interest);
+  const principalPaid = Math.max(0, amount - interestPaid);
+  d.principal = Math.max(0, outstandingWithInterest - amount);
+  if(d.principal <= 0.5){ d.principal = 0; d.status = 'closed'; d.closedAt = Date.now(); }
+  DB.payments.unshift({id:uid(), debtId, date, plannedAmount:d.minPayment, actualAmount:amount, principalPaid, interestPaid, feePaid:0, status:'paid'});
+  saveDB(); closeModal(); renderDebtList();
+  toast(d.status==='closed' ? `🎉 ปิดหนี้ "${d.name}" สำเร็จแล้ว!` : 'บันทึกการชำระเรียบร้อยแล้ว');
+}
+
+/* =========================================================================
+   FINANCE (income + expenses)
+   ========================================================================= */
+function renderFinance(){
+  window._financeTab = window._financeTab || 'income';
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="page-title">💰 การเงิน</div>
+    <div class="tabs">
+      <button class="tab" id="ftab-income" onclick="switchFinanceTab('income')">รายรับ</button>
+      <button class="tab" id="ftab-expense" onclick="switchFinanceTab('expense')">รายจ่าย</button>
+      <button class="tab" id="ftab-history" onclick="switchFinanceTab('history')">ประวัติ/วิเคราะห์</button>
+      <button class="tab" id="ftab-savings" onclick="switchFinanceTab('savings')">เงินสำรอง</button>
+    </div>
+    <div id="finance-body"></div>`;
+  switchFinanceTab(window._financeTab);
+}
+function switchFinanceTab(tab){
+  window._financeTab = tab;
+  ['income','expense','history','savings'].forEach(t=>document.getElementById('ftab-'+t).classList.toggle('active', t===tab));
+  const body = document.getElementById('finance-body');
+  if(tab==='history'){
+    body.innerHTML = '';
+    renderHistoryBody();
+  } else if(tab==='income'){
+    body.innerHTML = `
+      <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openIncomeForm()">+ เพิ่มรายรับ</button></div>
+      <div class="card" id="income-list"></div>
+      <div class="card"><b>รายได้รวมโดยประมาณ (ต่อเดือน)</b><div class="stat" style="border:none;padding:8px 0"><div class="v">฿${money(totalIncome())}</div></div>
+      <div class="hint">รายได้ไม่แน่นอนจะถูกคำนวณแบบระมัดระวัง (คิดที่ 80% ของค่าเฉลี่ยที่กรอก) เพื่อไม่ให้วางแผนเกินตัว</div></div>`;
+    renderIncomeList();
+  } else if(tab==='expense'){
+    body.innerHTML = `
+      <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openExpenseForm()">+ เพิ่มรายจ่าย</button></div>
+      <div class="card" id="expense-list"></div>`;
+    renderExpenseList();
+  } else {
+    const f = computeFinance();
+    body.innerHTML = `
+      <div class="card">
+        <label>เป้าหมายเงินสำรอง/ออมต่อเดือน (บาท)</label>
+        <input type="number" min="0" id="sv-goal" value="${DB.monthlySavingsGoal||0}">
+        <label>เงินสำรองฉุกเฉินที่มีอยู่ปัจจุบัน (บาท)</label>
+        <input type="number" min="0" id="sv-current" value="${DB.savingsCurrent||0}">
+        <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="saveSavings()">บันทึก</button>
+      </div>
+      <div class="card">
+        <b>ความครอบคลุมเงินสำรองฉุกเฉิน</b>
+        <div class="stat" style="border:none;padding:8px 0"><div class="v">${f.essential>0 ? (DB.savingsCurrent/f.essential).toFixed(1) : '0'} เดือน</div><div class="l">เทียบกับค่าใช้จ่ายจำเป็นต่อเดือน (฿${money(f.essential)})</div></div>
+        ${(f.essential>0 && (DB.savingsCurrent/f.essential) < 3) ? `<div class="check-alert show">แนะนำให้มีเงินสำรองอย่างน้อย 3 เดือนของค่าใช้จ่ายจำเป็นก่อนทุ่มเงินโปะหนี้ทั้งหมด เพื่อป้องกันเหตุฉุกเฉิน</div>` : ''}
+      </div>`;
+  }
+}
+function renderIncomeList(){
+  document.getElementById('income-list').innerHTML = DB.incomes.length ? DB.incomes.map(i=>`
+    <div class="list-item">
+      <div class="thumb ph">💵</div>
+      <div class="grow"><div class="li-title">${esc(i.name)} <span class="badge ${i.type==='regular'?'ok':'warn'}">${i.type==='regular'?'ประจำ':'ไม่แน่นอน'}</span></div>
+      <div class="li-sub">฿${money(i.amount)} / ${freqLabel(i.frequency)} · เฉลี่ย ฿${money(monthlyAmount(i))}/เดือน</div></div>
+      <div class="li-actions"><button class="btn btn-outline btn-sm" onclick="openIncomeForm('${i.id}')">แก้ไข</button><button class="btn btn-danger btn-sm" onclick="deleteIncome('${i.id}')">ลบ</button></div>
+    </div>`).join('') : `<div class="empty">ยังไม่มีข้อมูลรายรับ</div>`;
+}
+function freqLabel(f){ return {monthly:'เดือน', weekly:'สัปดาห์', daily:'วัน', yearly:'ปี'}[f]||f; }
+function openIncomeForm(id){
+  const i = id ? DB.incomes.find(x=>x.id===id) : null;
+  openModal(`
+    <div class="modal-head"><h3>${i?'แก้ไขรายรับ':'เพิ่มรายรับ'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <label>ชื่อรายรับ <span class="req">*</span></label>
+    <input type="text" id="if-name" value="${i?esc(i.name):''}" placeholder="เช่น เงินเดือน">
+    <div class="row">
+      <div class="grow"><label>จำนวนเงิน (บาท) <span class="req">*</span></label><input type="number" min="0" id="if-amount" value="${i?i.amount:''}"></div>
+      <div class="grow"><label>ความถี่</label><select id="if-freq"><option value="monthly" ${!i||i.frequency==='monthly'?'selected':''}>ต่อเดือน</option><option value="weekly" ${i&&i.frequency==='weekly'?'selected':''}>ต่อสัปดาห์</option><option value="daily" ${i&&i.frequency==='daily'?'selected':''}>ต่อวัน</option><option value="yearly" ${i&&i.frequency==='yearly'?'selected':''}>ต่อปี</option></select></div>
+    </div>
+    <label>ประเภท</label>
+    <select id="if-type"><option value="regular" ${!i||i.type==='regular'?'selected':''}>รายได้ประจำ</option><option value="irregular" ${i&&i.type==='irregular'?'selected':''}>รายได้ไม่แน่นอน</option></select>
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveIncome(${i?`'${i.id}'`:'null'})">บันทึก</button>
+  `);
+}
+function saveIncome(id){
+  const name = document.getElementById('if-name').value.trim();
+  const amount = Number(document.getElementById('if-amount').value);
+  if(!name || !(amount>0)){ toast('กรุณากรอกข้อมูลให้ครบและถูกต้อง'); return; }
+  const data = {name, amount, frequency:document.getElementById('if-freq').value, type:document.getElementById('if-type').value};
+  if(id) Object.assign(DB.incomes.find(x=>x.id===id), data);
+  else DB.incomes.push({id:uid(), ...data});
+  saveDB(); closeModal(); renderIncomeList();
+}
+function deleteIncome(id){ if(!confirm('ยืนยันการลบ?'))return; DB.incomes=DB.incomes.filter(x=>x.id!==id); saveDB(); renderIncomeList(); }
+
+function renderExpenseList(){
+  document.getElementById('expense-list').innerHTML = DB.expenses.length ? EXPENSE_LEVELS.map(lv=>{
+    const items = DB.expenses.filter(e=>e.level===lv.key);
+    if(!items.length) return '';
+    return `<div style="margin-bottom:10px"><b style="font-size:13px"><span class="badge ${lv.color}">${lv.label}</span></b>
+      ${items.map(e=>`<div class="list-item">
+        <div class="grow"><div class="li-title">${esc(e.name)}</div><div class="li-sub">฿${money(e.amount)} / ${freqLabel(e.frequency)} · เฉลี่ย ฿${money(monthlyAmount(e))}/เดือน</div></div>
+        <div class="li-actions"><button class="btn btn-outline btn-sm" onclick="openExpenseForm('${e.id}')">แก้ไข</button><button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">ลบ</button></div>
+      </div>`).join('')}</div>`;
+  }).join('') : `<div class="empty">ยังไม่มีข้อมูลรายจ่าย</div>`;
+}
+function openExpenseForm(id){
+  const e = id ? DB.expenses.find(x=>x.id===id) : null;
+  openModal(`
+    <div class="modal-head"><h3>${e?'แก้ไขรายจ่าย':'เพิ่มรายจ่าย'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <label>ชื่อรายจ่าย <span class="req">*</span></label>
+    <input type="text" id="ef-name" value="${e?esc(e.name):''}" placeholder="เช่น ค่าเช่าบ้าน">
+    <div class="row">
+      <div class="grow"><label>จำนวนเงิน (บาท) <span class="req">*</span></label><input type="number" min="0" id="ef-amount" value="${e?e.amount:''}"></div>
+      <div class="grow"><label>ความถี่</label><select id="ef-freq"><option value="monthly" ${!e||e.frequency==='monthly'?'selected':''}>ต่อเดือน</option><option value="weekly" ${e&&e.frequency==='weekly'?'selected':''}>ต่อสัปดาห์</option><option value="daily" ${e&&e.frequency==='daily'?'selected':''}>ต่อวัน</option><option value="yearly" ${e&&e.frequency==='yearly'?'selected':''}>ต่อปี</option></select></div>
+    </div>
+    <label>ระดับความจำเป็น</label>
+    <select id="ef-level">${EXPENSE_LEVELS.map(lv=>`<option value="${lv.key}" ${e&&e.level===lv.key?'selected':(!e&&lv.key==='essential'?'selected':'')}>${lv.label}</option>`).join('')}</select>
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveExpense(${e?`'${e.id}'`:'null'})">บันทึก</button>
+  `);
+}
+function saveExpense(id){
+  const name = document.getElementById('ef-name').value.trim();
+  const amount = Number(document.getElementById('ef-amount').value);
+  if(!name || !(amount>0)){ toast('กรุณากรอกข้อมูลให้ครบและถูกต้อง'); return; }
+  const data = {name, amount, frequency:document.getElementById('ef-freq').value, level:document.getElementById('ef-level').value};
+  if(id) Object.assign(DB.expenses.find(x=>x.id===id), data);
+  else DB.expenses.push({id:uid(), ...data});
+  saveDB(); closeModal(); renderExpenseList();
+}
+function deleteExpense(id){ if(!confirm('ยืนยันการลบ?'))return; DB.expenses=DB.expenses.filter(x=>x.id!==id); saveDB(); renderExpenseList(); }
+function saveSavings(){
+  DB.monthlySavingsGoal = Number(document.getElementById('sv-goal').value)||0;
+  DB.savingsCurrent = Number(document.getElementById('sv-current').value)||0;
+  saveDB(); toast('บันทึกแล้ว'); switchFinanceTab('savings');
+}
+
+/* =========================================================================
+   TRANSACTIONS — dated income/expense log, filters, summaries, charts,
+   smart "what to cut" recommendations, and Excel export.
+   ========================================================================= */
+function openTransactionForm(id){
+  const t = id ? DB.transactions.find(x=>x.id===id) : null;
+  const today = new Date().toISOString().slice(0,10);
+  const type = t ? t.type : 'expense';
+  openModal(`
+    <div class="modal-head"><h3>${t?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
+    <label>ประเภท</label>
+    <div class="seg" id="tf-type-seg">
+      <button type="button" class="${type==='income'?'active':''}" onclick="txSetType('income')">รายรับ</button>
+      <button type="button" class="${type==='expense'?'active':''}" onclick="txSetType('expense')">รายจ่าย</button>
+    </div>
+    <input type="hidden" id="tf-type" value="${type}">
+    <label>รายการ <span class="req">*</span></label>
+    <input type="text" id="tf-name" value="${t?esc(t.name):''}" placeholder="เช่น ค่ากาแฟ, เงินเดือน">
+    <div class="row">
+      <div class="grow"><label>จำนวนเงิน (บาท) <span class="req">*</span></label><input type="number" min="0" id="tf-amount" value="${t?t.amount:''}"></div>
+      <div class="grow"><label>วันที่ <span class="req">*</span></label><input type="date" id="tf-date" value="${t?t.date:today}"></div>
+    </div>
+    <div id="tf-cat-wrap"></div>
+    <label>โน้ต (ไม่บังคับ)</label>
+    <input type="text" id="tf-note" value="${t?esc(t.note||''):''}">
+    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveTransaction(${t?`'${t.id}'`:'null'})">บันทึก</button>
+  `);
+  renderTxCatField(t ? t.category : (type==='income'?TX_INCOME_CATS[0]:TX_EXPENSE_CATS[0]), t ? t.level : 'essential');
+}
+function txSetType(type){
+  document.getElementById('tf-type').value = type;
+  document.querySelectorAll('#tf-type-seg button').forEach((b,i)=>b.classList.toggle('active', (i===0)===(type==='income')));
+  renderTxCatField();
+}
+function renderTxCatField(presetCat, presetLevel){
+  const type = document.getElementById('tf-type').value;
+  const wrap = document.getElementById('tf-cat-wrap');
+  const cats = type==='income' ? TX_INCOME_CATS : TX_EXPENSE_CATS;
+  let html = `<label>หมวดหมู่</label><select id="tf-cat">${cats.map(c=>`<option ${presetCat===c?'selected':''}>${c}</option>`).join('')}</select>`;
+  if(type==='expense'){
+    html += `<label>ระดับความจำเป็น</label><select id="tf-level">${EXPENSE_LEVELS.map(lv=>`<option value="${lv.key}" ${presetLevel===lv.key?'selected':''}>${lv.label}</option>`).join('')}</select>`;
+  }
+  wrap.innerHTML = html;
+}
+function saveTransaction(id){
+  const name = document.getElementById('tf-name').value.trim();
+  const amount = Number(document.getElementById('tf-amount').value);
+  const date = document.getElementById('tf-date').value;
+  const type = document.getElementById('tf-type').value;
+  if(!name || !(amount>0) || !date){ toast('กรุณากรอกข้อมูลให้ครบและถูกต้อง'); return; }
+  const data = {
+    type, name, amount, date,
+    category: document.getElementById('tf-cat').value,
+    level: type==='expense' ? document.getElementById('tf-level').value : null,
+    note: document.getElementById('tf-note').value.trim()
+  };
+  if(id) Object.assign(DB.transactions.find(x=>x.id===id), data);
+  else DB.transactions.push({id:uid(), ...data});
+  saveDB(); closeModal(); toast('บันทึกรายการแล้ว');
+  renderHistoryBody();
+}
+function deleteTransaction(id){
+  if(!confirm('ยืนยันการลบรายการนี้?')) return;
+  DB.transactions = DB.transactions.filter(x=>x.id!==id);
+  saveDB(); renderHistoryBody();
+}
+
+/* ---- filtering ---- */
+function txFilterState(){
+  window._txFilter = window._txFilter || {period:'month', typeFilter:'all', levelFilter:'all', start:null, end:null};
+  return window._txFilter;
+}
+function periodRange(period, anchor){
+  const d = anchor ? new Date(anchor) : new Date();
+  let start, end;
+  if(period==='week'){
+    const day = d.getDay(); const diffToMon = (day+6)%7;
+    start = new Date(d); start.setDate(d.getDate()-diffToMon); start.setHours(0,0,0,0);
+    end = new Date(start); end.setDate(start.getDate()+6); end.setHours(23,59,59,999);
+  } else if(period==='month'){
+    start = new Date(d.getFullYear(), d.getMonth(), 1);
+    end = new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59,999);
+  } else if(period==='year'){
+    start = new Date(d.getFullYear(), 0, 1);
+    end = new Date(d.getFullYear(), 11, 31, 23,59,59,999);
+  } else { return null; }
   return {start, end};
 }
-function computeProfitData(){
-  const bounds = getProfitRangeBounds();
-  if(!bounds){ toast('กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด'); return null; }
-  const orders = activeOrders().filter(o=>o.timestamp>=bounds.start && o.timestamp<=bounds.end);
-  const byProduct = {};
-  orders.forEach(o=>o.items.forEach(it=>{
-    const product = DB.products.find(p=>p.id===it.productId);
-    const unitCost = product ? calcProductCost(product) : 0;
-    const key = it.productId;
-    if(!byProduct[key]) byProduct[key] = {name:it.name, qty:0, revenue:0, cost:0, missing: !product};
-    byProduct[key].qty += it.qty;
-    byProduct[key].revenue += it.qty*it.price;
-    byProduct[key].cost += it.qty*unitCost;
-  }));
-  const rows = Object.values(byProduct).map(r=>({...r, profit: r.revenue-r.cost, margin: r.revenue>0 ? (r.revenue-r.cost)/r.revenue*100 : 0}))
-    .sort((a,b)=>b.profit-a.profit);
-  const totalRevenue = rows.reduce((s,r)=>s+r.revenue,0);
-  const totalCost = rows.reduce((s,r)=>s+r.cost,0);
-  const totalProfit = totalRevenue-totalCost;
-  const totalMargin = totalRevenue>0 ? totalProfit/totalRevenue*100 : 0;
-  return {rows, totalRevenue, totalCost, totalProfit, totalMargin, orderCount:orders.length};
-}
-function runProfit(){
-  const data = computeProfitData();
-  if(!data) return;
-  window._profitData = data;
-  const maxProfit = Math.max(1, ...data.rows.map(r=>Math.abs(r.profit)));
-  const bars = data.rows.slice(0,8).map(r=>`
-    <div style="margin-bottom:8px">
-      <div class="row" style="justify-content:space-between;font-size:12.5px;margin-bottom:3px">
-        <span>${esc(r.name)}${r.missing?' <span class="badge warn">ไม่พบสินค้า</span>':''}</span>
-        <span style="font-weight:700;color:${r.profit>=0?'var(--teal-700)':'var(--danger)'}">฿${money(r.profit)}</span>
-      </div>
-      <div style="background:var(--paper);border-radius:8px;height:10px;overflow:hidden">
-        <div style="height:100%;width:${Math.max(2,Math.abs(r.profit)/maxProfit*100)}%;background:${r.profit>=0?'var(--teal-600)':'var(--danger)'};border-radius:8px"></div>
-      </div>
-    </div>`).join('') || '<div class="empty">ไม่มีข้อมูลในช่วงเวลานี้</div>';
-
-  const rows = data.rows.map(r=>`
-    <tr>
-      <td>${esc(r.name)}${r.missing?' <span class="badge warn">ไม่พบสินค้า</span>':''}</td>
-      <td>${r.qty}</td>
-      <td>฿${money(r.revenue)}</td>
-      <td>฿${money(r.cost)}</td>
-      <td style="color:${r.profit>=0?'var(--teal-700)':'var(--danger)'};font-weight:600">฿${money(r.profit)}</td>
-      <td>${r.margin.toFixed(1)}%</td>
-    </tr>`).join('');
-
-  document.getElementById('profit-result').innerHTML = `
-    <div class="stat-grid">
-      <div class="stat"><div class="v">฿${money(data.totalRevenue)}</div><div class="l">รายได้รวม</div></div>
-      <div class="stat"><div class="v">฿${money(data.totalCost)}</div><div class="l">ต้นทุนรวม</div></div>
-      <div class="stat"><div class="v" style="color:${data.totalProfit>=0?'var(--teal-700)':'var(--danger)'}">฿${money(data.totalProfit)}</div><div class="l">กำไรสุทธิ</div></div>
-      <div class="stat"><div class="v">${data.totalMargin.toFixed(1)}%</div><div class="l">อัตรากำไรเฉลี่ย</div></div>
-    </div>
-    <div class="card">
-      <b>สินค้าทำกำไรสูงสุด</b>
-      <div style="margin-top:12px">${bars}</div>
-    </div>
-    <div class="card">
-      <b>รายละเอียดกำไร-ขาดทุนตามสินค้า</b>
-      <div class="tbl-wrap" style="margin-top:10px">
-        <table><tr><th>สินค้า</th><th>จำนวนขาย</th><th>รายได้</th><th>ต้นทุน</th><th>กำไร</th><th>%กำไร</th></tr>
-        ${rows || '<tr><td colspan=6 class="empty">ไม่มีข้อมูลในช่วงเวลานี้</td></tr>'}
-        </table>
-      </div>
-    </div>`;
-}
-function exportProfitExcel(){
-  const data = window._profitData;
-  if(!data || !data.rows.length){ toast('ไม่มีข้อมูลสำหรับ Export'); return; }
-  const rows = data.rows.map(r=>({
-    'สินค้า': r.name, 'จำนวนขาย': r.qty, 'รายได้': r.revenue, 'ต้นทุน': r.cost,
-    'กำไร': r.profit, '%กำไร': Number(r.margin.toFixed(2))
-  }));
-  rows.push({'สินค้า':'รวมทั้งหมด','จำนวนขาย':'', 'รายได้':data.totalRevenue, 'ต้นทุน':data.totalCost, 'กำไร':data.totalProfit, '%กำไร':Number(data.totalMargin.toFixed(2))});
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'กำไร-ขาดทุน');
-  XLSX.writeFile(wb, `profit_loss_${Date.now()}.xlsx`);
-  logActivity('Export Excel', `ส่งออกข้อมูลกำไร-ขาดทุน`);
-}
-
-/* =========================================================================
-   PAYMENT METHODS
-   ========================================================================= */
-function renderPayments(){
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">💳 จัดการการชำระเงิน</div>
-    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openPMForm()">+ เพิ่มวิธีการชำระเงิน</button></div>
-    <div class="card" id="pm-list"></div>
-    <div class="card">
-      <b>การแจ้งเตือน LINE Notify</b>
-      <p class="hint">กรอก LINE Notify Token เพื่อแจ้งเตือนอัตโนมัติเมื่อมี Order ใหม่ (ต้องเปิดผ่านเซิร์ฟเวอร์ที่รองรับ CORS เพื่อให้ทำงานได้จริงบนเบราว์เซอร์)</p>
-      <input type="text" id="line-token" placeholder="LINE Notify Token" value="${esc(DB.settings.lineToken||'')}">
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="saveLineToken()">บันทึก Token</button>
-    </div>`;
-  renderPMList();
-}
-function saveLineToken(){ DB.settings.lineToken = document.getElementById('line-token').value.trim(); saveDB(); toast('บันทึกแล้ว'); }
-function renderPMList(){
-  document.getElementById('pm-list').innerHTML = DB.paymentMethods.length ? DB.paymentMethods.map(pm=>`
-    <div class="list-item">
-      ${pm.icon?`<img class="thumb" src="${pm.icon}">`:`<div class="thumb ph">💳</div>`}
-      <div class="grow"><div class="li-title">${esc(pm.name)}</div><div class="li-sub">${esc(pm.desc||'')}</div></div>
-      <div class="li-actions">
-        <button class="btn btn-outline btn-sm" onclick="openPMForm('${pm.id}')">แก้ไข</button>
-        ${pm.cash?'':`<button class="btn btn-danger btn-sm" onclick="deletePM('${pm.id}')">ลบ</button>`}
-      </div>
-    </div>`).join('') : `<div class="empty">ยังไม่มีวิธีการชำระเงิน</div>`;
-}
-function openPMForm(id){
-  const pm = id ? DB.paymentMethods.find(x=>x.id===id) : null;
-  currentEditImg.pmIcon = pm?pm.icon:''; currentEditImg.pmQr = pm?pm.qrImage:'';
-  openModal(`
-    <div class="modal-head"><h3>${pm?'แก้ไขวิธีการชำระเงิน':'เพิ่มวิธีการชำระเงิน'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <label>ชื่อวิธีการชำระเงิน <span class="req">*</span></label>
-    <input type="text" id="pmf-name" value="${pm?esc(pm.name):''}">
-    <label>รายละเอียด</label>
-    <textarea id="pmf-desc">${pm?esc(pm.desc||''):''}</textarea>
-    <label>ไอคอน <span class="req">*</span></label>
-    ${uploadBoxHTML('pmf-iconbox','pmIcon', pm?pm.icon:'', 'แตะเพื่ออัปโหลดไอคอน')}
-    <label>ภาพแนบ (ถ้ามี เช่น QR Code)</label>
-    ${uploadBoxHTML('pmf-qrbox','pmQr', pm?pm.qrImage:'', 'แตะเพื่ออัปโหลด QR Code')}
-    <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
-      <label class="switch"><input type="checkbox" id="pmf-cash" ${pm&&pm.cash?'checked':''}><span class="slider"></span></label>
-      เป็นการชำระด้วยเงินสด (แสดงช่องรับเงิน/ทอนเงิน)
-    </label>
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="savePM(${pm?`'${pm.id}'`:'null'})">บันทึก</button>
-  `);
-}
-function savePM(id){
-  const name = document.getElementById('pmf-name').value.trim();
-  if(!name){ toast('กรุณากรอกชื่อวิธีการชำระเงิน'); return; }
-  if(!currentEditImg.pmIcon){ toast('กรุณาอัปโหลดไอคอน'); return; }
-  const now=Date.now();
-  if(id){
-    const pm = DB.paymentMethods.find(x=>x.id===id);
-    pm.name=name; pm.desc=document.getElementById('pmf-desc').value.trim(); pm.icon=currentEditImg.pmIcon;
-    pm.qrImage=currentEditImg.pmQr||''; pm.cash=document.getElementById('pmf-cash').checked;
-    pm.updatedBy=SESSION.username; pm.updatedAt=now;
-    logActivity('แก้ไขวิธีชำระเงิน', `แก้ไข ${name}`);
-  } else {
-    DB.paymentMethods.push({id:uid(), name, desc:document.getElementById('pmf-desc').value.trim(), icon:currentEditImg.pmIcon, qrImage:currentEditImg.pmQr||'', cash:document.getElementById('pmf-cash').checked, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่มวิธีชำระเงิน', `เพิ่ม ${name}`);
+function getFilteredTransactions(){
+  const f = txFilterState();
+  let list = DB.transactions.slice();
+  if(f.period!=='all' && f.period!=='custom'){
+    const r = periodRange(f.period);
+    list = list.filter(t=>{ const dt=new Date(t.date); return dt>=r.start && dt<=r.end; });
+  } else if(f.period==='custom' && f.start && f.end){
+    const s=new Date(f.start), e=new Date(f.end); e.setHours(23,59,59,999);
+    list = list.filter(t=>{ const dt=new Date(t.date); return dt>=s && dt<=e; });
   }
-  saveDB(); closeModal(); renderPMList();
+  if(f.typeFilter!=='all') list = list.filter(t=>t.type===f.typeFilter);
+  if(f.levelFilter!=='all') list = list.filter(t=>t.type==='expense' && t.level===f.levelFilter);
+  return list.sort((a,b)=> new Date(b.date)-new Date(a.date));
 }
-function deletePM(id){
-  if(!confirm('ยืนยันการลบ?')) return;
-  const pm = DB.paymentMethods.find(x=>x.id===id);
-  DB.paymentMethods = DB.paymentMethods.filter(x=>x.id!==id);
-  logActivity('ลบวิธีชำระเงิน', `ลบ ${pm.name}`);
-  saveDB(); renderPMList();
+function setTxFilter(key, val){
+  const f = txFilterState(); f[key]=val;
+  if(key==='period' && val!=='custom'){ f.start=null; f.end=null; }
+  renderHistoryBody();
+}
+
+/* ---- grouping / summaries ---- */
+function groupKey(dateStr, granularity){
+  const d = new Date(dateStr);
+  if(granularity==='day') return dateStr;
+  if(granularity==='week'){ const r = periodRange('week', dateStr); return r.start.toISOString().slice(0,10); }
+  if(granularity==='year') return String(d.getFullYear());
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); /* month default */
+}
+function groupLabel(key, granularity){
+  if(granularity==='year') return key+' พ.ศ.'+(Number(key)+543 - Number(key)); /* keep simple, show AD year */
+  if(granularity==='month'){ const [y,m]=key.split('-'); return new Date(y,m-1,1).toLocaleDateString('th-TH',{month:'short',year:'numeric'}); }
+  if(granularity==='week') return 'สัปดาห์ของ '+fmtDate(key);
+  return fmtDate(key);
+}
+function summarizeByPeriod(list, granularity){
+  const map = {};
+  list.forEach(t=>{
+    const k = groupKey(t.date, granularity);
+    if(!map[k]) map[k] = {key:k, income:0, expense:0, essential:0, reducible:0, cuttable:0};
+    if(t.type==='income') map[k].income += Number(t.amount);
+    else { map[k].expense += Number(t.amount); if(t.level) map[k][t.level] += Number(t.amount); }
+  });
+  return Object.values(map).sort((a,b)=> a.key<b.key?-1:1);
+}
+function summarizeByCategory(list){
+  const map = {};
+  list.filter(t=>t.type==='expense').forEach(t=>{
+    if(!map[t.category]) map[t.category] = 0;
+    map[t.category] += Number(t.amount);
+  });
+  return Object.entries(map).map(([category,total])=>({category,total})).sort((a,b)=>b.total-a.total);
+}
+
+/* ---- smart recommendations: what to reduce ---- */
+function computeRecommendations(){
+  const recs = [];
+  const f = computeFinance();
+  /* look at last 3 months of actual transactions for real spending patterns */
+  const since = new Date(); since.setMonth(since.getMonth()-3);
+  const recent = DB.transactions.filter(t=>t.type==='expense' && new Date(t.date)>=since);
+  const byCat = summarizeByCategory(recent);
+  const monthsSpan = Math.max(1, Math.round((Date.now()-since.getTime())/(30*24*3600*1000)));
+
+  /* 1) budget-level warning: reducible+cuttable eating too much of income */
+  if(f.income>0){
+    const flexPct = (f.reducible+f.cuttable)/f.income*100;
+    if(flexPct > 30){
+      recs.push({title:'ค่าใช้จ่ายที่ "ลดได้/ตัดได้" สูงเกินไป',
+        detail:`หมวดที่ลดได้และตัดได้รวมกัน ฿${money(f.reducible+f.cuttable)}/เดือน คิดเป็น ${Math.round(flexPct)}% ของรายได้ (แนะนำไม่ควรเกิน 30%) ลองลดลง 20% จะเหลือเงินโปะหนี้เพิ่มอีก ฿${money((f.reducible+f.cuttable)*0.2)}/เดือน`});
+    }
+  }
+  /* 2) top actual spending categories from transaction history (reducible/cuttable only) */
+  const cuttableCats = {};
+  recent.forEach(t=>{ if(t.level!=='essential'){ cuttableCats[t.category]=(cuttableCats[t.category]||0)+Number(t.amount); } });
+  Object.entries(cuttableCats).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([cat,total])=>{
+    const perMonth = total/monthsSpan;
+    if(perMonth>0){
+      const extraIfCut30 = perMonth*0.3;
+      recs.push({title:`หมวด "${cat}" ใช้จ่ายเยอะและลดได้`,
+        detail:`เฉลี่ย ฿${money(Math.round(perMonth))}/เดือน จากประวัติ 3 เดือนล่าสุด — ลด 30% จะประหยัดได้ประมาณ ฿${money(Math.round(extraIfCut30))}/เดือน`});
+    }
+  });
+  /* 3) if extra payment capacity increases, show impact on payoff time */
+  const debts = activeDebts();
+  if(debts.length && recs.length){
+    const extraGuess = recs.reduce((s,r)=>{
+      const m = r.detail.match(/ประหยัด(?:ได้)?ประมาณ ฿([\d,]+)/);
+      return s + (m ? Number(m[1].replace(/,/g,'')) : 0);
+    },0);
+    if(extraGuess>0){
+      const base = simulateDebtPayoff(debts, DB.extraPayment, DB.strategy, DB.customOrder);
+      const boosted = simulateDebtPayoff(debts, Number(DB.extraPayment||0)+extraGuess, DB.strategy, DB.customOrder);
+      if(base.feasible && boosted.feasible && boosted.months < base.months){
+        recs.push({title:'ผลลัพธ์ถ้าทำตามคำแนะนำข้างต้นทั้งหมด',
+          detail:`ถ้านำเงินที่ประหยัดได้ (~฿${money(extraGuess)}/เดือน) ไปโปะหนี้เพิ่ม จะปลดหนี้เร็วขึ้น ${monthLabel(base.months-boosted.months)} จากแผนเดิม`});
+      }
+    }
+  }
+  /* 4) savings goal shortfall */
+  if(f.essential>0 && DB.savingsCurrent < f.essential*3){
+    recs.push({title:'เงินสำรองฉุกเฉินยังไม่ครบ 3 เดือน',
+      detail:`ปัจจุบันมี ฿${money(DB.savingsCurrent)} เทียบกับค่าใช้จ่ายจำเป็น ฿${money(f.essential)}/เดือน — ควรกันเงินส่วนหนึ่งไว้สำรองก่อนโปะหนี้ทั้งหมด`});
+  }
+  if(!recs.length) recs.push({title:'ยังไม่มีคำแนะนำในตอนนี้', detail:'บันทึกรายรับ-รายจ่ายต่อเนื่องสัก 2-3 เดือน ระบบจะวิเคราะห์และแนะนำสิ่งที่ควรลดให้อัตโนมัติ'});
+  return recs;
+}
+
+/* ---- render: history tab (filters + list + summary + chart + recs) ---- */
+let _txChart = null;
+function renderHistoryBody(){
+  const body = document.getElementById('finance-body');
+  if(!body) return;
+  const f = txFilterState();
+  const list = getFilteredTransactions();
+  const totalIn = list.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+  const totalOut = list.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+  const granularity = f.period==='week' ? 'day' : f.period==='year' ? 'month' : f.period==='month' ? 'day' : 'month';
+  const grouped = summarizeByPeriod(list, granularity);
+  const byCat = summarizeByCategory(list).slice(0,8);
+  const recs = computeRecommendations();
+
+  body.innerHTML = `
+    <div class="card">
+      <div class="seg" style="margin-bottom:8px">
+        ${['week','month','year','custom'].map(p=>`<button class="${f.period===p?'active':''}" onclick="setTxFilter('period','${p}')">${{week:'สัปดาห์นี้',month:'เดือนนี้',year:'ปีนี้',custom:'กำหนดเอง'}[p]}</button>`).join('')}
+      </div>
+      ${f.period==='custom' ? `
+      <div class="row">
+        <div class="grow"><label>จากวันที่</label><input type="date" value="${f.start||''}" onchange="setTxFilter('start',this.value)"></div>
+        <div class="grow"><label>ถึงวันที่</label><input type="date" value="${f.end||''}" onchange="setTxFilter('end',this.value)"></div>
+      </div>` : ''}
+      <div class="filter-bar" style="margin-top:10px">
+        <select onchange="setTxFilter('typeFilter',this.value)">
+          <option value="all">ทุกประเภท</option>
+          <option value="income" ${f.typeFilter==='income'?'selected':''}>รายรับ</option>
+          <option value="expense" ${f.typeFilter==='expense'?'selected':''}>รายจ่าย</option>
+        </select>
+        <select onchange="setTxFilter('levelFilter',this.value)">
+          <option value="all">ทุกระดับ</option>
+          ${EXPENSE_LEVELS.map(lv=>`<option value="${lv.key}" ${f.levelFilter===lv.key?'selected':''}>${lv.label}</option>`).join('')}
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportTransactionsExcel()">📊 Export Excel</button>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="v" style="color:var(--good)">฿${money(totalIn)}</div><div class="l">รายรับรวม (ตามช่วงที่เลือก)</div></div>
+      <div class="stat"><div class="v" style="color:var(--danger)">฿${money(totalOut)}</div><div class="l">รายจ่ายรวม (ตามช่วงที่เลือก)</div></div>
+      <div class="stat accent"><div class="v">฿${money(totalIn-totalOut)}</div><div class="l">คงเหลือสุทธิ</div></div>
+    </div>
+    <div class="card">
+      <b>แนวโน้มรายรับ-รายจ่าย</b>
+      <div class="chart-wrap"><canvas id="tx-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <b>สรุปตามหมวดหมู่ (รายจ่าย)</b>
+      <div class="chart-wrap" style="height:${Math.max(160,byCat.length*32)}px"><canvas id="cat-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <b>💡 ระบบแนะนำสิ่งที่ควรลด</b>
+      <div style="margin-top:10px">${recs.map(r=>`<div class="rec-card"><b>${esc(r.title)}</b><p>${esc(r.detail)}</p></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center"><b>สรุปตามช่วงเวลา</b></div>
+      <div class="tbl-wrap" style="margin-top:8px"><table class="summary-table">
+        <tr><th>ช่วง</th><th class="num">รายรับ</th><th class="num">รายจ่าย</th><th class="num">คงเหลือ</th></tr>
+        ${grouped.map(g=>`<tr><td>${groupLabel(g.key,granularity)}</td><td class="num" style="color:var(--good)">฿${money(g.income)}</td><td class="num" style="color:var(--danger)">฿${money(g.expense)}</td><td class="num">฿${money(g.income-g.expense)}</td></tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted)">ไม่มีข้อมูลในช่วงนี้</td></tr>`}
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center"><b>รายการทั้งหมด (${list.length})</b><button class="btn btn-primary btn-sm" onclick="openTransactionForm()">+ เพิ่มรายการ</button></div>
+      <div style="margin-top:8px">
+        ${list.length ? list.map(t=>`
+          <div class="tx-item">
+            <div class="tx-ico ${t.type}">${t.type==='income'?'💵':'🧾'}</div>
+            <div class="grow">
+              <div class="li-title">${esc(t.name)}</div>
+              <div class="li-sub">${esc(t.category)}${t.level?' · '+EXPENSE_LEVELS.find(lv=>lv.key===t.level).label:''} · ${fmtDate(t.date)}${t.note?' · '+esc(t.note):''}</div>
+            </div>
+            <div class="tx-amt ${t.type}">${t.type==='income'?'+':'-'}฿${money(t.amount)}</div>
+            <div class="li-actions">
+              <button class="btn btn-outline btn-sm" onclick="openTransactionForm('${t.id}')">แก้ไข</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTransaction('${t.id}')">ลบ</button>
+            </div>
+          </div>`).join('') : `<div class="empty">ยังไม่มีรายการในช่วงนี้ — กด "+ เพิ่มรายการ"</div>`}
+      </div>
+    </div>`;
+
+  drawTxCharts(grouped, granularity, byCat);
+}
+function drawTxCharts(grouped, granularity, byCat){
+  const ctx1 = document.getElementById('tx-chart');
+  if(ctx1 && window.Chart){
+    if(_txChart) _txChart.destroy();
+    _txChart = new Chart(ctx1, {
+      type:'bar',
+      data:{ labels: grouped.map(g=>groupLabel(g.key,granularity)),
+        datasets:[
+          {label:'รายรับ', data:grouped.map(g=>g.income), backgroundColor:'#1E8E5A'},
+          {label:'รายจ่าย', data:grouped.map(g=>g.expense), backgroundColor:'#C1502E'}
+        ]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}}}
+    });
+  }
+  const ctx2 = document.getElementById('cat-chart');
+  if(ctx2 && window.Chart){
+    if(window._catChart) window._catChart.destroy();
+    window._catChart = new Chart(ctx2, {
+      type:'bar',
+      data:{ labels: byCat.map(c=>c.category), datasets:[{label:'บาท', data:byCat.map(c=>c.total), backgroundColor:'#137A68'}] },
+      options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}}}
+    });
+  }
+}
+
+/* ---- Excel export (SheetJS) ---- */
+function exportTransactionsExcel(){
+  if(typeof XLSX==='undefined'){ toast('ไม่สามารถโหลดไลบรารี Excel ได้ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'); return; }
+  const list = getFilteredTransactions();
+  const wb = XLSX.utils.book_new();
+  const txRows = list.map(t=>({
+    วันที่:t.date, ประเภท: t.type==='income'?'รายรับ':'รายจ่าย', รายการ:t.name, หมวดหมู่:t.category,
+    ระดับ: t.level ? EXPENSE_LEVELS.find(lv=>lv.key===t.level).label : '', จำนวนเงิน:Number(t.amount), โน้ต:t.note||''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txRows.length?txRows:[{หมายเหตุ:'ไม่มีรายการในช่วงที่เลือก'}]), 'รายการ');
+  const monthly = summarizeByPeriod(list, 'month').map(g=>({เดือน:g.key, รายรับ:g.income, รายจ่าย:g.expense, คงเหลือ:g.income-g.expense}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthly.length?monthly:[{หมายเหตุ:'ไม่มีข้อมูล'}]), 'สรุปรายเดือน');
+  const cats = summarizeByCategory(list).map(c=>({หมวดหมู่:c.category, ยอดรวม:c.total}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cats.length?cats:[{หมายเหตุ:'ไม่มีข้อมูล'}]), 'สรุปตามหมวดหมู่');
+  const debtsRows = DB.debts.map(d=>({ชื่อหนี้:d.name, เจ้าหนี้:d.creditor, คงเหลือ:d.principal, ดอกเบี้ย:d.interestRate+'%'+(d.rateUnit==='month'?'/เดือน':'/ปี'), ขั้นต่ำต่อเดือน:d.minPayment, สถานะ:d.status==='closed'?'ปิดแล้ว':'ค้างอยู่'}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(debtsRows.length?debtsRows:[{หมายเหตุ:'ไม่มีข้อมูลหนี้'}]), 'หนี้');
+  XLSX.writeFile(wb, `DebtFreedom_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('ดาวน์โหลดไฟล์ Excel แล้ว');
 }
 
 /* =========================================================================
-   SHOP INFO
+   PLAN (strategy + schedule + recommendation)
    ========================================================================= */
-function renderShop(){
-  const s = DB.shop;
-  currentEditImg.shop = s.image;
+/* =========================================================================
+   PAUSE / REDUCE PLAN — "หยุดจ่ายแบบไม่กระทบ": the smartest, safest set of
+   temporary cuts. Never touches 'essential' items. 'cuttable' items are
+   suggested to pause in full (already flagged by the user as non-essential);
+   'reducible' items are only trimmed ~30% so day-to-day life isn't disrupted.
+   ========================================================================= */
+function computePauseCandidates(){
+  return DB.expenses.filter(e=>e.level!=='essential').map(e=>{
+    const monthlyAmt = monthlyAmount(e);
+    const action = e.level==='cuttable' ? 'pause' : 'reduce';
+    const savings = action==='pause' ? monthlyAmt : monthlyAmt*0.3;
+    return {id:e.id, name:e.name, level:e.level, monthlyAmt, action, savings};
+  }).sort((a,b)=> (a.level==='cuttable'?0:1)-(b.level==='cuttable'?0:1) || b.savings-a.savings);
+}
+function pauseSelection(){
+  window._pauseSel = window._pauseSel || {};
+  return window._pauseSel;
+}
+function togglePauseItem(id){
+  const sel = pauseSelection();
+  sel[id] = !sel[id];
+  renderPlan();
+}
+function renderPausePlanCard(f, debts){
+  const candidates = computePauseCandidates();
+  const sel = pauseSelection();
+  candidates.forEach(c=>{ if(sel[c.id]===undefined) sel[c.id]=true; }); /* default: smart plan picks all of them */
+  if(!candidates.length){
+    return `<div class="card" style="border:2px solid var(--amber)">
+      <b>⏸️ แผนหยุด/ลดรายจ่ายชั่วคราว (แบบไม่กระทบ)</b>
+      <p class="hint" style="margin-top:6px">ยังไม่มีรายจ่ายที่ระบุระดับ "ลดได้" หรือ "ตัดได้" — ไปที่เมนู "การเงิน → รายจ่าย" แล้วระบุระดับความจำเป็นของแต่ละรายการ ระบบจะช่วยแนะนำแผนหยุดจ่ายที่ปลอดภัยให้อัตโนมัติ</p>
+    </div>`;
+  }
+  const selectedTotal = candidates.filter(c=>sel[c.id]).reduce((s,c)=>s+c.savings,0);
+  const base = simulateDebtPayoff(debts, DB.extraPayment, DB.strategy, DB.customOrder);
+  const withPause = simulateDebtPayoff(debts, Number(DB.extraPayment||0)+selectedTotal, DB.strategy, DB.customOrder);
+  const monthsSaved = (base.feasible && withPause.feasible) ? Math.max(0, base.months - withPause.months) : 0;
+  const interestSaved = Math.max(0, base.totalInterest - withPause.totalInterest);
+  let durationNote;
+  if(f.essential>0 && DB.savingsCurrent < f.essential*3){
+    const gap = f.essential*3 - DB.savingsCurrent;
+    const monthsToReserve = selectedTotal>0 ? Math.ceil(gap/selectedTotal) : null;
+    durationNote = monthsToReserve ? `แนะนำทำต่อเนื่องประมาณ ${monthsToReserve} เดือน จนกว่าเงินสำรองฉุกเฉินจะครบ 3 เท่าของค่าใช้จ่ายจำเป็น แล้วค่อยประเมินใหม่` : `แนะนำทำต่อเนื่องจนกว่าเงินสำรองฉุกเฉินจะครบ 3 เดือนของค่าใช้จ่ายจำเป็น`;
+  } else {
+    durationNote = `แนะนำทำต่อเนื่อง 3–6 เดือน แล้วทบทวนอีกครั้งว่ายังจำเป็นต้องหยุด/ลดต่อหรือไม่`;
+  }
+  return `
+    <div class="card" style="border:2px solid var(--amber)">
+      <b>⏸️ แผนหยุด/ลดรายจ่ายชั่วคราว (แบบไม่กระทบ) — แผนที่ฉลาดที่สุดตอนนี้</b>
+      <p class="hint" style="margin-top:6px">ระบบเลือกให้เฉพาะรายการที่ "ลดได้"/"ตัดได้" เท่านั้น ไม่แตะรายจ่ายจำเป็นเด็ดขาด รายการ "ตัดได้" แนะนำหยุดจ่ายเต็มจำนวน ส่วนรายการ "ลดได้" แนะนำลดลงแค่ ~30% เพื่อไม่ให้กระทบชีวิตประจำวันมากเกินไป — ปรับติ๊กเลือก/ไม่เลือกรายการได้ตามสะดวก</p>
+      <div style="margin-top:10px">
+        ${candidates.map(c=>`
+          <label class="list-item" style="cursor:pointer">
+            <input type="checkbox" ${sel[c.id]?'checked':''} onchange="togglePauseItem('${c.id}')" style="width:18px;height:18px;flex-shrink:0">
+            <div class="grow">
+              <div class="li-title">${esc(c.name)} <span class="badge ${c.level==='cuttable'?'danger':'warn'}">${c.level==='cuttable'?'ตัดได้':'ลดได้'}</span></div>
+              <div class="li-sub">${c.action==='pause'?'หยุดจ่ายชั่วคราว':'ลดลง ~30% ชั่วคราว'} · เดิม ฿${money(c.monthlyAmt)}/เดือน</div>
+            </div>
+            <div class="tx-amt income">ประหยัด ฿${money(Math.round(c.savings))}</div>
+          </label>`).join('')}
+      </div>
+      <div class="divider"></div>
+      <div class="stat-grid" style="margin-bottom:0">
+        <div class="stat accent"><div class="v">฿${money(Math.round(selectedTotal))}</div><div class="l">เงินที่ปลดล็อกได้/เดือน</div></div>
+        <div class="stat"><div class="v">${monthsSaved>0?monthLabel(monthsSaved):'-'}</div><div class="l">ปลดหนี้เร็วขึ้น</div></div>
+        <div class="stat"><div class="v">฿${money(Math.round(interestSaved))}</div><div class="l">ดอกเบี้ยที่ประหยัดได้</div></div>
+      </div>
+      <p class="hint" style="margin-top:10px">⏱️ ${durationNote}</p>
+      <button class="btn btn-amber btn-block" style="margin-top:10px" ${selectedTotal<=0?'disabled':''} onclick="applyPausePlan(${Math.round(selectedTotal)})">ใช้แผนนี้ — เพิ่มเข้ากับเงินโปะหนี้ต่อเดือน</button>
+    </div>`;
+}
+function applyPausePlan(amount){
+  DB.extraPayment = Number(DB.extraPayment||0) + Number(amount||0);
+  saveDB();
+  toast(`เพิ่มเงินโปะหนี้อีก ฿${money(amount)}/เดือนตามแผนหยุดจ่ายแล้ว`);
+  renderPlan();
+}
+
+function renderPlan(){
   const main = document.getElementById('main');
+  const debts = activeDebts();
+  if(!debts.length){
+    main.innerHTML = `<div class="page-title">🎯 แผนปลดหนี้</div><div class="card empty">ยังไม่มีหนี้ที่ต้องวางแผน — ไปเพิ่มหนี้ที่เมนู "หนี้ของฉัน" ก่อน</div>`;
+    return;
+  }
+  const f = computeFinance();
+  const avalanche = simulateDebtPayoff(debts, DB.extraPayment, 'avalanche');
+  const snowball = simulateDebtPayoff(debts, DB.extraPayment, 'snowball');
+  const recommended = avalanche.totalInterest <= snowball.totalInterest ? 'avalanche' : 'snowball';
+  const recResult = recommended==='avalanche' ? avalanche : snowball;
+  const other = recommended==='avalanche' ? snowball : avalanche;
+  const saved = Math.max(0, other.totalInterest - recResult.totalInterest);
+  const monthsSaved = Math.max(0, other.months - recResult.months);
+
   main.innerHTML = `
-    <div class="page-title">🏬 ข้อมูลร้าน</div>
+    <div class="page-title">🎯 แผนปลดหนี้</div>
+    ${renderPausePlanCard(f, debts)}
     <div class="card">
-      <label>ชื่อร้าน <span class="req">*</span></label>
-      <input type="text" id="sf-name" value="${esc(s.name)}">
-      <label>รายละเอียดข้อมูลร้าน <span class="req">*</span></label>
-      <textarea id="sf-desc">${esc(s.desc)}</textarea>
-      <label>ที่อยู่ <span class="req">*</span></label>
-      <textarea id="sf-addr">${esc(s.address)}</textarea>
-      <label>เบอร์โทร <span class="req">*</span></label>
-      <input type="tel" id="sf-phone" maxlength="10" value="${esc(s.phone)}">
-      <div class="hint">กรอกได้เฉพาะตัวเลข 10 หลัก</div>
-      <label>รูปภาพร้าน</label>
-      ${uploadBoxHTML('sf-imgbox','shop', s.image, 'แตะเพื่ออัปโหลดภาพร้าน')}
-      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveShop()">บันทึกข้อมูลร้าน</button>
+      <label>เงินโปะเพิ่มเติมต่อเดือน (บาท) <span class="hint" style="display:inline">— สามารถโปะได้สูงสุดประมาณ ฿${money(f.extraCapacity)}/เดือน จากกระแสเงินสดปัจจุบัน</span></label>
+      <div class="slider-wrap">
+        <input type="range" id="plan-extra-slider" min="0" max="${Math.max(20000, Math.round(f.extraCapacity*2))}" step="500" value="${DB.extraPayment||0}" oninput="onExtraSliderChange(this.value)">
+        <div class="row" style="justify-content:space-between"><span class="hint">฿0</span><b id="plan-extra-value">฿${money(DB.extraPayment||0)}</b><span class="hint">฿${money(Math.max(20000, Math.round(f.extraCapacity*2)))}</span></div>
+      </div>
     </div>
     <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูลร้าน</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('ร้าน')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
+      <b>เลือกกลยุทธ์การโปะหนี้</b>
+      <div class="row wrap" style="margin-top:10px;gap:10px">
+        <div class="strategy-card grow ${DB.strategy==='avalanche'?'active':''}" onclick="setStrategy('avalanche')">
+          <h4>❄️ Avalanche</h4><p>เรียงดอกเบี้ยสูง → ต่ำ ประหยัดดอกเบี้ยรวมมากที่สุด</p>
+        </div>
+        <div class="strategy-card grow ${DB.strategy==='snowball'?'active':''}" onclick="setStrategy('snowball')">
+          <h4>⛄ Snowball</h4><p>เรียงยอดหนี้น้อย → มาก ปิดหนี้ทีละก้อนเร็ว ให้กำลังใจตัวเอง</p>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="border:2px solid var(--teal-600)">
+      <b>💡 ระบบแนะนำ: ${recommended==='avalanche'?'Avalanche':'Snowball'}</b>
+      <p class="hint" style="margin-top:6px">เพราะ${monthsSaved>0?` หมดหนี้เร็วกว่าอีกแผน ${monthLabel(monthsSaved)}`:'ใช้เวลาเท่ากัน'}${saved>0?` และประหยัดดอกเบี้ยประมาณ ฿${money(saved)}`:''} (ค่างวดต่อเดือนเท่ากัน)</p>
+      <button class="btn btn-amber btn-sm" style="margin-top:6px" onclick="setStrategy('${recommended}')">ใช้แผนนี้</button>
+    </div>
+    <div class="card">
+      <b>เปรียบเทียบแผน</b>
+      <div class="tbl-wrap" style="margin-top:8px"><table>
+        <tr><th></th><th>Avalanche</th><th>Snowball</th></tr>
+        <tr><td>ระยะเวลาปลดหนี้</td><td>${avalanche.feasible?monthLabel(avalanche.months):'เกิน 50 ปี'}</td><td>${snowball.feasible?monthLabel(snowball.months):'เกิน 50 ปี'}</td></tr>
+        <tr><td>ดอกเบี้ยรวมโดยประมาณ</td><td>฿${money(avalanche.totalInterest)}</td><td>฿${money(snowball.totalInterest)}</td></tr>
       </table></div>
+    </div>
+    <div class="card">
+      <b>ตารางคาดการณ์การปิดหนี้แต่ละก้อน (ตามแผนที่เลือก: ${DB.strategy==='avalanche'?'Avalanche':'Snowball'})</b>
+      <div class="timeline" style="margin-top:14px">
+        ${(DB.strategy==='avalanche'?avalanche:snowball).perDebt.filter(p=>p.closedMonth).sort((a,b)=>a.closedMonth-b.closedMonth).map(p=>`
+          <div class="tl-item done"><b>${esc(p.name)}</b> หมดหนี้ — อีก ${monthLabel(p.closedMonth)} 🎉</div>
+        `).join('') || '<div class="hint">คำนวณไม่สำเร็จ — ตรวจสอบว่ากรอกดอกเบี้ยและค่างวดขั้นต่ำครบทุกก้อนแล้ว</div>'}
+        <div class="tl-item"><b>ปลดหนี้ทั้งหมด 🎉</b> — อีก ${(DB.strategy==='avalanche'?avalanche:snowball).feasible ? monthLabel((DB.strategy==='avalanche'?avalanche:snowball).months) : 'เกิน 50 ปี'}</div>
+      </div>
+    </div>`;
+}
+function onExtraSliderChange(val){
+  DB.extraPayment = Number(val);
+  document.getElementById('plan-extra-value').textContent = '฿'+money(val);
+  saveDB();
+  clearTimeout(window._planT);
+  window._planT = setTimeout(()=>{ if(CURRENT_PAGE==='plan') renderPlan(); }, 350);
+}
+function setStrategy(s){ DB.strategy = s; saveDB(); renderPlan(); }
+
+/* =========================================================================
+   SETTINGS
+   ========================================================================= */
+function renderSettings(){
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="page-title">⚙️ ตั้งค่า</div>
+    <div class="card">
+      <label>ชื่อของคุณ</label>
+      <input type="text" id="st-name" value="${esc(DB.profile.name)}">
+      <label>รหัส PIN (เว้นว่าง = ไม่ล็อกระบบ)</label>
+      <input type="password" id="st-pin" maxlength="4" inputmode="numeric" value="${esc(DB.profile.pin||'')}">
+      <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="saveProfile()">บันทึก</button>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <b>☁️ ซิงค์ข้อมูลกับ Firebase</b>
+        <span class="sync-badge ${fbConfigured()?'on':'off'}" id="sync-badge">${fbConfigured()?'🔄 กำลังเชื่อมต่อ...':'⚪ ยังไม่ได้ตั้งค่าในโค้ด'}</span>
+      </div>
+      ${fbConfigured() ? `
+        <p class="hint">เชื่อมต่อ Firebase ไว้แล้วในโค้ด ข้อมูลจะซิงค์ข้ามอุปกรณ์แบบเรียลไทม์โดยอัตโนมัติ — พิมพ์อะไรจากเครื่องหนึ่ง อีกเครื่องที่ใช้รหัสซิงค์เดียวกันและเปิดแอปค้างไว้จะเห็นทันที</p>
+        <button class="btn btn-ghost btn-sm" onclick="pullFromFirebase(true)">🔄 บังคับดึงข้อมูลล่าสุด</button>
+      ` : `
+        <p class="hint">ยังไม่ได้ตั้งค่า Firebase — แอปทำงานแบบเก็บข้อมูลในเบราว์เซอร์เครื่องนี้เท่านั้น (localStorage) ต้องการให้ข้อมูลซิงค์ข้ามอุปกรณ์? เปิดไฟล์นี้ด้วยโปรแกรมแก้ไขข้อความ ค้นหาคำว่า <b>FIREBASE_CONFIG</b> ใกล้ต้นไฟล์ในส่วน &lt;script&gt; แล้วใส่ค่าจากโปรเจกต์ Firebase ของคุณ พร้อมตั้ง <b>FIREBASE_SYNC_CODE</b> เป็นข้อความยาวๆ ที่คาดเดาไม่ได้ (มีคำอธิบายขั้นตอนเต็มเป็นคอมเมนต์กำกับไว้ในโค้ดตรงจุดนั้นแล้ว) จากนั้นบันทึกไฟล์แล้วเปิดใหม่</p>
+      `}
     </div>
     <div class="card" style="border:1px solid var(--danger-bg)">
       <b style="color:var(--danger)">⚠️ เขตอันตราย</b>
-      <p class="hint">ล้างแคชระบบจะลบข้อมูลทั้งหมดที่บันทึกไว้ในเบราว์เซอร์เครื่องนี้ (สินค้า วัตถุดิบ ผู้ใช้งาน ประวัติการขาย ข้อมูลร้าน การตั้งค่า) แล้วเริ่มต้นระบบใหม่ทั้งหมด แนะนำให้ Export ข้อมูลสำรองไว้ก่อนที่เมนู "ภาพรวม" หรือ "กำไร-ขาดทุน"</p>
-      <button class="btn btn-danger btn-sm" onclick="openClearCacheModal()">🧹 ล้างแคช / รีเซ็ตข้อมูลทั้งหมด</button>
-    </div>`;
-}
-function saveShop(){
-  const name=document.getElementById('sf-name').value.trim();
-  const desc=document.getElementById('sf-desc').value.trim();
-  const addr=document.getElementById('sf-addr').value.trim();
-  const phone=document.getElementById('sf-phone').value.trim();
-  if(!name||!desc||!addr||!phone){ toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
-  if(!/^\d{10}$/.test(phone)){ toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก'); return; }
-  DB.shop = {name, desc, address:addr, phone, image: currentEditImg.shop||DB.shop.image||''};
-  logActivity('แก้ไขข้อมูลร้าน', `${SESSION.username} อัปเดตข้อมูลร้าน`);
-  saveDB();
-  document.getElementById('tb-shopname').textContent = '🏪 ' + name;
-  document.getElementById('sb-shopname').textContent = name;
-  toast('บันทึกข้อมูลร้านแล้ว'); renderShop();
-}
-
-/* =========================================================================
-   USERS + ROLES
-   ========================================================================= */
-function renderUsers(){
-  window._usersTab = window._usersTab || 'users';
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <div class="page-title">👤 จัดการผู้ใช้งาน</div>
-    <div class="tabs">
-      <button class="tab" id="utab-users" onclick="switchUsersTab('users')">ผู้ใช้งาน</button>
-      <button class="tab" id="utab-roles" onclick="switchUsersTab('roles')">🔑 จัดการ Role</button>
+      <p class="hint">ล้างข้อมูลทั้งหมดในเบราว์เซอร์เครื่องนี้อย่างถาวร (รายรับ รายจ่าย หนี้ ประวัติการชำระ)</p>
+      <button class="btn btn-danger btn-sm" onclick="openResetModal()">🧹 ล้างข้อมูลทั้งหมด</button>
     </div>
-    <div id="users-tab-body"></div>`;
-  switchUsersTab(window._usersTab);
-}
-function switchUsersTab(tab){
-  window._usersTab = tab;
-  document.getElementById('utab-users').classList.toggle('active', tab==='users');
-  document.getElementById('utab-roles').classList.toggle('active', tab==='roles');
-  document.getElementById('users-tab-body').innerHTML = tab==='users' ? `
-    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openUserForm()">+ เพิ่มผู้ใช้งาน</button></div>
-    <div class="card" id="user-list"></div>
     <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูลผู้ใช้งาน</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('ผู้ใช้งาน')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
-      </table></div>
-    </div>` : `
-    <div class="row" style="margin-bottom:12px"><button class="btn btn-primary grow" onclick="openRoleForm()">+ เพิ่ม Role</button></div>
-    <div class="card" id="role-list"></div>
-    <div class="card">
-      <b>ประวัติการบันทึก/แก้ไขข้อมูล Role</b>
-      <div class="tbl-wrap" style="margin-top:8px"><table><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>รายละเอียด</th></tr>
-      ${DB.activityLog.filter(l=>l.action.includes('Role')).slice(0,15).map(l=>`<tr><td>${fmtDateTime(l.time)}</td><td>${esc(l.user)}</td><td>${esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">ไม่มีข้อมูล</td></tr>'}
-      </table></div>
+      <p class="hint">Debt Freedom System — เวอร์ชัน MVP (Phase 1): จัดการรายรับ-รายจ่าย (พร้อมประวัติย้อนหลัง ตัวกรอง สรุปรายสัปดาห์/เดือน/ปี คำแนะนำสิ่งที่ควรลด และ Export Excel), จัดการหนี้หลายก้อน, Debt Calculator, กลยุทธ์ Avalanche/Snowball, Dashboard, ตารางคาดการณ์การปลดหนี้ และซิงค์ข้ามอุปกรณ์ผ่าน Firebase (ไม่บังคับ) ข้อมูลหลักเก็บไว้ในเบราว์เซอร์เครื่องนี้เสมอ (localStorage) เป็นสำเนาสำรองแม้เชื่อมต่อ Firebase อยู่</p>
     </div>`;
-  if(tab==='users') renderUserList(); else renderRoleList();
+  setSyncStatus(fbConfigured() ? (window._syncStatus||'syncing') : 'off');
 }
-
-/* ---- Roles CRUD ---- */
-function renderRoleList(){
-  document.getElementById('role-list').innerHTML = DB.roles.length ? DB.roles.map(r=>{
-    const inUse = DB.users.filter(u=>u.role===r.name).length;
-    return `<div class="list-item">
-      <div class="thumb ph">🔑</div>
-      <div class="grow">
-        <div class="li-title">${esc(r.name)} ${r.isSystem?'<span class="badge ok">ระบบ</span>':''}</div>
-        <div class="li-sub">มองเห็น ${r.permissions.length}/${MENUS.length} เมนู · ใช้งานโดย ${inUse} คน</div>
-      </div>
-      <div class="li-actions">
-        <button class="btn btn-outline btn-sm" onclick="openRoleForm('${r.id}')">แก้ไข</button>
-        ${r.isSystem?'':`<button class="btn btn-danger btn-sm" onclick="deleteRole('${r.id}')">ลบ</button>`}
-      </div>
-    </div>`;
-  }).join('') : `<div class="empty">ยังไม่มี Role</div>`;
-}
-function openRoleForm(id){
-  const r = id ? DB.roles.find(x=>x.id===id) : null;
-  const perms = r ? r.permissions : MENUS.map(m=>m.key);
-  const locked = r && r.isSystem;
-  openModal(`
-    <div class="modal-head"><h3>${r?'แก้ไข Role':'เพิ่ม Role'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    ${locked ? `<div class="hint">Role นี้เป็น Role ระบบ (Superadmin) มองเห็นทุกเมนูเสมอและไม่สามารถเปลี่ยนชื่อหรือลบได้</div>` : ''}
-    <label>ชื่อ Role <span class="req">*</span></label>
-    <input type="text" id="rf-name" value="${r?esc(r.name):''}" ${locked?'disabled':''}>
-    <label>สิทธิ์การมองเห็นเมนู (Permission) เริ่มต้นของ Role นี้</label>
-    <div class="perm-grid">
-      ${MENUS.map(m=>`<label class="perm-item"><input type="checkbox" data-rperm="${m.key}" ${perms.includes(m.key)?'checked':''} ${locked?'disabled':''}> ${m.em} ${m.label}</label>`).join('')}
-    </div>
-    <div class="hint">สิทธิ์นี้ใช้เป็นค่าเริ่มต้นเวลาสร้างผู้ใช้งานใหม่ที่เลือก Role นี้ — ผู้ใช้แต่ละคนยังปรับสิทธิ์ของตัวเองแยกได้ที่หน้าจัดการผู้ใช้งาน</div>
-    ${locked ? '' : `<button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveRole(${r?`'${r.id}'`:'null'})">บันทึก</button>`}
-  `);
-}
-function saveRole(id){
-  const name = document.getElementById('rf-name').value.trim();
-  if(!name){ toast('กรุณากรอกชื่อ Role'); return; }
-  const dup = DB.roles.find(x=>x.name===name && x.id!==id);
-  if(dup){ toast('มีชื่อ Role นี้อยู่แล้ว'); return; }
-  const perms = Array.from(document.querySelectorAll('[data-rperm]')).filter(c=>c.checked).map(c=>c.dataset.rperm);
-  const now = Date.now();
-  if(id){
-    const r = DB.roles.find(x=>x.id===id);
-    const oldName = r.name;
-    r.name = name; r.permissions = perms; r.updatedBy=SESSION.username; r.updatedAt=now;
-    if(oldName!==name){
-      DB.users.forEach(u=>{ if(u.role===oldName) u.role = name; });
-      if(SESSION.role===oldName) SESSION.role = name;
-    }
-    logActivity('แก้ไข Role', `แก้ไข Role ${name}`);
-  } else {
-    DB.roles.push({id:uid(), name, permissions:perms, isSystem:false, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่ม Role', `เพิ่ม Role ${name}`);
-  }
-  saveDB(); closeModal(); renderRoleList();
-}
-function deleteRole(id){
-  const r = DB.roles.find(x=>x.id===id);
-  if(r.isSystem){ toast('ไม่สามารถลบ Role ระบบได้'); return; }
-  const inUse = DB.users.filter(u=>u.role===r.name).length;
-  if(inUse>0){ toast(`ไม่สามารถลบได้ เนื่องจากมีผู้ใช้งาน ${inUse} คนใช้ Role นี้อยู่`); return; }
-  if(!confirm('ยืนยันการลบ Role นี้?')) return;
-  DB.roles = DB.roles.filter(x=>x.id!==id);
-  logActivity('ลบ Role', `ลบ Role ${r.name}`);
-  saveDB(); renderRoleList();
-}
-function applyRoleDefaults(){
-  const roleName = document.getElementById('uf-role').value;
-  const role = DB.roles.find(r=>r.name===roleName);
-  if(!role) return;
-  document.querySelectorAll('[data-perm]').forEach(cb=>{ cb.checked = role.permissions.includes(cb.dataset.perm); });
-  toast('โหลดสิทธิ์เริ่มต้นจาก Role แล้ว');
-}
-function renderUserList(){
-  document.getElementById('user-list').innerHTML = DB.users.map(u=>`
-    <div class="list-item">
-      ${u.image?`<img class="thumb" src="${u.image}">`:`<div class="thumb ph">👤</div>`}
-      <div class="grow">
-        <div class="li-title">${esc(u.name)} <span class="badge ${u.active?'ok':'off'}">${u.active?'เปิดใช้งาน':'ปิดใช้งาน'}</span></div>
-        <div class="li-sub">${esc(u.username)} · ${esc(u.role)}</div>
-      </div>
-      <div class="li-actions">
-        <button class="btn btn-outline btn-sm" onclick="openUserForm('${u.id}')">แก้ไข</button>
-        ${u.id!=='u_admin'?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">ลบ</button>`:''}
-      </div>
-    </div>`).join('');
-}
-function openUserForm(id){
-  const u = id ? DB.users.find(x=>x.id===id) : null;
-  currentEditImg.user = u?u.image:'';
-  const perms = u ? (u.permissions||[]) : MENUS.map(m=>m.key);
-  openModal(`
-    <div class="modal-head"><h3>${u?'แก้ไขผู้ใช้งาน':'เพิ่มผู้ใช้งาน'}</h3><button class="close-x" onclick="closeModal()">✕</button></div>
-    <label>Username <span class="req">*</span></label>
-    <input type="text" id="uf-username" value="${u?esc(u.username):''}">
-    <label>Password <span class="req">*</span></label>
-    <input type="text" id="uf-password" value="${u?esc(u.password):''}">
-    <label>ชื่อ <span class="req">*</span></label>
-    <input type="text" id="uf-name" value="${u?esc(u.name):''}">
-    <label>เบอร์โทร <span class="req">*</span></label>
-    <input type="tel" id="uf-phone" maxlength="10" value="${u?esc(u.phone):''}">
-    <div class="hint">กรอกได้เฉพาะตัวเลข 10 หลัก</div>
-    <label>รูปภาพโปรไฟล์</label>
-    ${uploadBoxHTML('uf-imgbox','user', u?u.image:'', 'แตะเพื่ออัปโหลดรูปโปรไฟล์')}
-    <label>Role</label>
-    <div class="row">
-      <select id="uf-role" class="grow">${DB.roles.map(r=>`<option ${u&&u.role===r.name?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="applyRoleDefaults()">โหลดสิทธิ์เริ่มต้น</button>
-    </div>
-    <div class="hint">ไม่พบ Role ที่ต้องการ? ไปที่แท็บ "🔑 จัดการ Role" เพื่อเพิ่ม Role ใหม่ได้</div>
-    <label>สิทธิ์การมองเห็นเมนู (Permission)</label>
-    <div class="perm-grid">
-      ${MENUS.map(m=>`<label class="perm-item"><input type="checkbox" data-perm="${m.key}" ${perms.includes(m.key)?'checked':''}> ${m.em} ${m.label}</label>`).join('')}
-    </div>
-    <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
-      <label class="switch"><input type="checkbox" id="uf-active" ${(!u||u.active)?'checked':''}><span class="slider"></span></label>
-      เปิดใช้งานบัญชีนี้
-    </label>
-    <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="saveUser(${u?`'${u.id}'`:'null'})">บันทึก</button>
-  `);
-}
-function saveUser(id){
-  const username = document.getElementById('uf-username').value.trim();
-  const password = document.getElementById('uf-password').value;
-  const name = document.getElementById('uf-name').value.trim();
-  const phone = document.getElementById('uf-phone').value.trim();
-  if(!username||!password||!name||!phone){ toast('กรุณากรอกข้อมูลให้ครบถ้วน'); return; }
-  if(!/^\d{10}$/.test(phone)){ toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก'); return; }
-  const dup = DB.users.find(x=>x.username===username && x.id!==id);
-  if(dup){ toast('Username นี้ถูกใช้งานแล้ว'); return; }
-  const perms = Array.from(document.querySelectorAll('[data-perm]')).filter(c=>c.checked).map(c=>c.dataset.perm);
-  const now = Date.now();
-  if(id){
-    const u = DB.users.find(x=>x.id===id);
-    u.username=username; u.password=password; u.name=name; u.phone=phone;
-    u.image=currentEditImg.user||u.image||''; u.role=document.getElementById('uf-role').value;
-    u.permissions=perms; u.active=document.getElementById('uf-active').checked;
-    u.updatedBy=SESSION.username; u.updatedAt=now;
-    logActivity('แก้ไขผู้ใช้งาน', `แก้ไขผู้ใช้งาน ${username}`);
-    if(SESSION.userId===id){ SESSION.permissions=perms; SESSION.role=u.role; renderNav(); }
-  } else {
-    DB.users.push({id:uid(), username, password, name, phone, image:currentEditImg.user||'', role:document.getElementById('uf-role').value, permissions:perms, active:document.getElementById('uf-active').checked, createdBy:SESSION.username, createdAt:now, updatedBy:SESSION.username, updatedAt:now});
-    logActivity('เพิ่มผู้ใช้งาน', `เพิ่มผู้ใช้งาน ${username}`);
-  }
-  saveDB(); closeModal(); renderUsers();
-}
-function deleteUser(id){
-  if(!confirm('ยืนยันการลบผู้ใช้งานนี้?')) return;
-  const u = DB.users.find(x=>x.id===id);
-  DB.users = DB.users.filter(x=>x.id!==id);
-  logActivity('ลบผู้ใช้งาน', `ลบผู้ใช้งาน ${u.username}`);
-  saveDB(); renderUsers();
+function saveProfile(){
+  const name = document.getElementById('st-name').value.trim();
+  const pin = document.getElementById('st-pin').value.trim();
+  if(!name){ toast('กรุณากรอกชื่อ'); return; }
+  if(pin && !/^\d{4}$/.test(pin)){ toast('PIN ต้องเป็นตัวเลข 4 หลัก หรือเว้นว่างไว้'); return; }
+  DB.profile.name = name; DB.profile.pin = pin;
+  saveDB(); document.getElementById('tb-user').textContent = name;
+  toast('บันทึกแล้ว');
 }
 
 /* =========================================================================
    BOOTSTRAP
    ========================================================================= */
-bootData(function(firstLoad){
-  document.getElementById('login-shopname').textContent = DB.shop.name || 'Todtingtermalatod';
-  if(firstLoad === undefined || firstLoad === true){
-    // first time data has arrived — reveal the login form and try to resume a session
-    document.getElementById('login-connecting').style.display = 'none';
-    document.getElementById('login-connect-err').style.display = 'none';
-    document.getElementById('login-form-fields').style.display = 'block';
-    try{
-      const raw = sessionStorage.getItem('posSession');
-      if(raw){
-        const s = JSON.parse(raw);
-        const u = DB.users.find(x=>x.id===s.userId && x.username===s.username);
-        if(u && u.active){ SESSION = {userId:u.id, username:u.username, name:u.name, role:u.role, permissions:u.permissions||[]}; enterApp(); }
-      }
-    }catch(e){}
-  } else {
-    // a later update (from this device or another) — just refresh what's on screen
-    refreshCurrentView();
-  }
-});
-document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+loadDB();
+showLoginScreen();
+document.getElementById('unlock-pin')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doUnlock(); });
 </script>
 </body>
 </html>
